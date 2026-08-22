@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react';
 import { api } from '../../data/api';
 import { formatINR } from '../../data/store';
 
+const statusLabels = {
+  paid: 'Paid',
+  paid_oversold: 'Needs attention',
+  created: 'Payment pending',
+  failed: 'Failed',
+};
+
 export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
   const [error, setError] = useState('');
@@ -30,12 +37,17 @@ export default function AdminOrders() {
           {orders.length === 0 && <p className="empty">No orders yet.</p>}
           {orders.map((o) => (
             <div className="order-row" key={o.id}>
+              {o.status === 'paid_oversold' && (
+                <div className="oversold-banner">
+                  ⚠ Paid after stock ran out for one or more items — check inventory and contact the customer if needed.
+                </div>
+              )}
               <div className="order-row-head">
                 <div>
                   <strong>#MLD{o.id}</strong>
                   <span className="order-customer">{o.customer_name} · {o.customer_email}</span>
                 </div>
-                <span className={`status-pill status-${o.status}`}>{o.status}</span>
+                <span className={`status-pill status-${o.status}`}>{statusLabels[o.status] || o.status}</span>
               </div>
               <div className="order-row-items">
                 {o.items.map((item) => (
@@ -46,7 +58,8 @@ export default function AdminOrders() {
                 <span>{new Date(o.created_at).toLocaleString('en-IN')}</span>
                 <span>{o.address_city}, {o.address_pincode}</span>
                 {o.razorpay_payment_id && <span>Payment: {o.razorpay_payment_id}</span>}
-                <strong>{formatINR(o.subtotal)}</strong>
+                {o.coupon_code && <span className="coupon-tag">{o.coupon_code} · −{formatINR(o.discount)}</span>}
+                <strong>{formatINR(o.subtotal - (o.discount || 0))}</strong>
               </div>
             </div>
           ))}
@@ -73,6 +86,16 @@ export default function AdminOrders() {
         .status-paid { background: #e8f2e6; color: #3c7a3c; }
         .status-created { background: var(--blush-300); color: var(--maroon-900); }
         .status-failed { background: #f6e3e3; color: #a13a3a; }
+        .status-paid_oversold { background: #fbeacb; color: #8a5a10; }
+        .oversold-banner {
+          background: #fbeacb;
+          color: #8a5a10;
+          font-size: 12px;
+          padding: 8px 12px;
+          border-radius: var(--radius-sm);
+          margin-bottom: 10px;
+        }
+        .coupon-tag { color: #3c7a3c; }
         .order-row-items { font-size: 12.5px; color: var(--ink-600); display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
         .order-row-foot { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: var(--ink-400); align-items: center; }
         .order-row-foot strong { margin-left: auto; color: var(--maroon-900); font-size: 14px; }

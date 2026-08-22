@@ -30,7 +30,35 @@ export default function Checkout() {
   const [orderId, setOrderId] = useState('');
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState('');
+  const [couponInput, setCouponInput] = useState('');
+  const [coupon, setCoupon] = useState(null); // { code, discount }
+  const [couponError, setCouponError] = useState('');
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
   const navigate = useNavigate();
+
+  const discount = coupon?.discount || 0;
+  const total = Math.max(subtotal - discount, 0);
+
+  async function handleApplyCoupon() {
+    if (!couponInput.trim()) return;
+    setApplyingCoupon(true);
+    setCouponError('');
+    try {
+      const result = await api.validateCoupon({ code: couponInput.trim(), subtotal });
+      setCoupon({ code: result.code, discount: result.discount });
+    } catch (err) {
+      setCoupon(null);
+      setCouponError(err.message);
+    } finally {
+      setApplyingCoupon(false);
+    }
+  }
+
+  function handleRemoveCoupon() {
+    setCoupon(null);
+    setCouponInput('');
+    setCouponError('');
+  }
 
   useEffect(() => {
     api
@@ -79,6 +107,7 @@ export default function Checkout() {
           state: address.state,
           pincode: address.pincode,
         },
+        couponCode: coupon?.code || undefined,
       };
       const { orderId: localOrderId, razorpayOrderId, amount, currency, keyId } = await api.createOrder(orderPayload);
 
@@ -231,16 +260,47 @@ export default function Checkout() {
 
           <div className="checkout-summary">
             <h3>Order Summary</h3>
+
+            <div className="coupon-box">
+              {coupon ? (
+                <div className="coupon-applied">
+                  <span>
+                    <strong>{coupon.code}</strong> applied — you saved {formatINR(coupon.discount)}
+                  </span>
+                  <button type="button" onClick={handleRemoveCoupon}>Remove</button>
+                </div>
+              ) : (
+                <>
+                  <div className="coupon-input-row">
+                    <input
+                      type="text"
+                      placeholder="Coupon code"
+                      value={couponInput}
+                      onChange={(e) => { setCouponInput(e.target.value.toUpperCase()); setCouponError(''); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleApplyCoupon(); } }}
+                    />
+                    <button type="button" className="btn btn-outline" disabled={applyingCoupon || !couponInput.trim()} onClick={handleApplyCoupon}>
+                      {applyingCoupon ? 'Checking…' : 'Apply'}
+                    </button>
+                  </div>
+                  {couponError && <p className="coupon-error">{couponError}</p>}
+                </>
+              )}
+            </div>
+
             <div className="summary-row"><span>Subtotal</span><span>{formatINR(subtotal)}</span></div>
+            {discount > 0 && (
+              <div className="summary-row discount-row"><span>Coupon discount</span><span>−{formatINR(discount)}</span></div>
+            )}
             <div className="summary-row"><span>Shipping</span><span>Free</span></div>
-            <div className="summary-row total"><span>Total</span><span>{formatINR(subtotal)}</span></div>
+            <div className="summary-row total"><span>Total</span><span>{formatINR(total)}</span></div>
             {error && <p className="checkout-error">{error}</p>}
             <button
               className="btn btn-primary place-order-btn"
               disabled={!selectedId || placing}
               onClick={handlePlaceOrder}
             >
-              {placing ? 'Processing…' : `Pay ${formatINR(subtotal)} with Razorpay`}
+              {placing ? 'Processing…' : `Pay ${formatINR(total)} with Razorpay`}
             </button>
             <p className="payment-note">Secure checkout via Razorpay — UPI, cards, net banking &amp; wallets.</p>
           </div>
@@ -318,6 +378,37 @@ export default function Checkout() {
           top: 100px;
         }
         .checkout-summary h3 { font-size: 17px; margin-bottom: 18px; }
+
+        .coupon-box { margin-bottom: 18px; }
+        .coupon-input-row { display: flex; gap: 8px; }
+        .coupon-input-row input {
+          flex: 1;
+          padding: 10px 12px;
+          border-radius: var(--radius-sm);
+          border: 1px solid var(--stone-200);
+          font-size: 13px;
+          text-transform: uppercase;
+          background: var(--paper);
+        }
+        .coupon-input-row .btn { padding: 10px 16px; font-size: 12.5px; white-space: nowrap; }
+        .coupon-error { font-size: 12px; color: #a13a3a; margin: 8px 0 0; }
+        .coupon-applied {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          background: #e8f2e6;
+          border-radius: var(--radius-sm);
+          padding: 10px 14px;
+          font-size: 12.5px;
+          color: #3c7a3c;
+        }
+        .coupon-applied button {
+          background: none; border: none; font-size: 12px; color: #3c7a3c;
+          text-decoration: underline; flex: 0 0 auto;
+        }
+        .discount-row span:last-child { color: #3c7a3c; font-weight: 600; }
+
         .summary-row { display: flex; justify-content: space-between; font-size: 13.5px; color: var(--ink-600); margin-bottom: 12px; }
         .summary-row.total {
           font-size: 15px; font-weight: 600; color: var(--maroon-900);

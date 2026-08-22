@@ -5,12 +5,14 @@ import { formatINR } from '../data/store';
 
 const statusTone = {
   paid: 'tone-delivered',
+  paid_oversold: 'tone-delivered',
   created: 'tone-processing',
   failed: 'tone-failed',
 };
 
 const statusLabel = {
   paid: 'Paid',
+  paid_oversold: 'Paid',
   created: 'Payment pending',
   failed: 'Payment failed',
 };

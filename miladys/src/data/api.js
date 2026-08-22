@@ -74,6 +74,13 @@ export const api = {
   verifyOrder: (payload) => request('/api/orders/verify', { method: 'POST', body: payload }),
   getMyOrders: () => request('/api/orders'),
   getAllOrders: () => request('/api/orders/admin/all'),
+
+  // coupons
+  validateCoupon: (payload) => request('/api/coupons/validate', { method: 'POST', body: payload }),
+  getCoupons: () => request('/api/coupons'),
+  createCoupon: (payload) => request('/api/coupons', { method: 'POST', body: payload }),
+  updateCoupon: (id, payload) => request(`/api/coupons/${id}`, { method: 'PUT', body: payload }),
+  deleteCoupon: (id) => request(`/api/coupons/${id}`, { method: 'DELETE' }),
 };
 
 export { BASE_URL };
