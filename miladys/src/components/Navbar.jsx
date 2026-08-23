@@ -173,11 +173,17 @@ export default function Navbar() {
             inset 0 -1px 0 rgba(0,0,0,0.14);
         }
         .navbar.is-transparent {
-          background: transparent;
-          border-color: transparent;
-          box-shadow: none;
-          backdrop-filter: none;
-          -webkit-backdrop-filter: none;
+          /* Colourless over the hero — no maroon tint — but still a
+             visible glass bar: soft blur, a light outline, and a subtle
+             sheen, so it doesn't look like it's simply missing. */
+          background: rgba(255, 255, 255, 0.08);
+          border-color: rgba(255, 255, 255, 0.28);
+          backdrop-filter: blur(16px) saturate(160%);
+          -webkit-backdrop-filter: blur(16px) saturate(160%);
+          box-shadow:
+            0 8px 24px rgba(0,0,0,0.12),
+            inset 0 1px 0 rgba(255,255,255,0.22),
+            inset 0 -1px 0 rgba(0,0,0,0.08);
         }
         .navbar-inner {
           position: relative;

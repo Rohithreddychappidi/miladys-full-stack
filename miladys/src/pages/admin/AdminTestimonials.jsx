@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getProducts, getTestimonials, saveTestimonials } from '../../data/store';
+import { api } from '../../data/api';
+import { getTestimonials, saveTestimonials } from '../../data/store';
 
 const emptyForm = { id: null, productId: '', name: '', rating: 5, text: '' };
 
@@ -11,7 +12,10 @@ export default function AdminTestimonials() {
   const [filterProduct, setFilterProduct] = useState('all');
 
   useEffect(() => {
-    setProducts(getProducts());
+    // Real products live on the backend now — pull from there so newly
+    // added products show up in the dropdown immediately, instead of the
+    // stale local seed list.
+    api.getProducts().then(({ products }) => setProducts(products)).catch(() => {});
     setTestimonials(getTestimonials());
   }, []);
 
