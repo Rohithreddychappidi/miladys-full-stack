@@ -3,9 +3,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import RecommendedProducts from '../components/RecommendedProducts';
 import ReviewsCarousel from '../components/ReviewsCarousel';
 import Testimonials from '../components/Testimonials';
+import CancellationPolicyCard from '../components/CancellationPolicyCard';
 import { useCart } from '../context/CartContext';
 import { api } from '../data/api';
-import { formatINR, getProducts, getTestimonials } from '../data/store';
+import { formatINR, getProducts } from '../data/store';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -38,7 +39,7 @@ export default function ProductDetail() {
         else setNotFound(true);
       });
 
-    setTestimonials(getTestimonials(id));
+    api.getTestimonials(id).then(({ testimonials }) => active && setTestimonials(testimonials)).catch(() => {});
     return () => { active = false; };
   }, [id]);
 
@@ -124,6 +125,8 @@ export default function ProductDetail() {
             )}
           </div>
           {added && <Link to="/cart" className="view-cart-link">View cart →</Link>}
+
+          <CancellationPolicyCard />
         </div>
       </div>
 

@@ -10,6 +10,7 @@ const links = [
   { to: '/admin/products', label: 'Products' },
   { to: '/admin/orders', label: 'Orders' },
   { to: '/admin/coupons', label: 'Coupons' },
+  { to: '/admin/cancellation-policy', label: 'Cancellation Policy' },
   { to: '/admin/reviews', label: 'Reviews' },
   { to: '/admin/testimonials', label: 'Testimonials' },
 ];

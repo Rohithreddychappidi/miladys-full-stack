@@ -8,6 +8,7 @@ const statusTone = {
   paid_oversold: 'tone-delivered',
   created: 'tone-processing',
   failed: 'tone-failed',
+  cancelled: 'tone-cancelled',
 };
 
 const statusLabel = {
@@ -15,12 +16,21 @@ const statusLabel = {
   paid_oversold: 'Paid',
   created: 'Payment pending',
   failed: 'Payment failed',
+  cancelled: 'Cancelled',
 };
+
+function daysSince(dateStr) {
+  if (!dateStr) return 0;
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+}
 
 export default function Orders() {
   const [orders, setOrders] = useState([]);
+  const [policy, setPolicy] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [cancellingId, setCancellingId] = useState(null);
+  const [cancelError, setCancelError] = useState('');
 
   useEffect(() => {
     api
@@ -28,7 +38,36 @@ export default function Orders() {
       .then(({ orders }) => setOrders(orders))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+    api.getCancellationPolicy().then(({ policy }) => setPolicy(policy)).catch(() => {});
   }, []);
+
+  function tierFor(order) {
+    const days = daysSince(order.paid_at);
+    return policy.find((t) => days <= t.max_days) || null;
+  }
+
+  async function handleCancel(order) {
+    const tier = tierFor(order);
+    const preview = tier
+      ? `You'll receive a ${tier.refund_percent}% refund (${formatINR(Math.round(((order.subtotal - (order.discount || 0)) * tier.refund_percent) / 100))}) based on the cancellation policy.`
+      : 'This order is outside the cancellation window.';
+    if (!window.confirm(`Cancel order #MLD${order.id}?\n\n${preview}`)) return;
+
+    setCancelError('');
+    setCancellingId(order.id);
+    try {
+      const result = await api.cancelOrder(order.id);
+      setOrders((prev) => prev.map((o) => (
+        o.id === order.id
+          ? { ...o, status: 'cancelled', refund_percent: result.refundPercent, refund_amount: result.refundAmount }
+          : o
+      )));
+    } catch (err) {
+      setCancelError(err.message);
+    } finally {
+      setCancellingId(null);
+    }
+  }
 
   return (
     <div className="orders-page">
@@ -44,40 +83,61 @@ export default function Orders() {
         {!loading && !error && orders.length === 0 && (
           <p className="empty-msg">You haven't placed any orders yet.</p>
         )}
+        {cancelError && <p className="empty-msg error">{cancelError}</p>}
 
         {!loading && orders.length > 0 && (
           <div className="orders-list">
-            {orders.map((o) => (
-              <div className="order-card" key={o.id}>
-                <div className="order-card-head">
-                  <div>
-                    <span className="order-id">#MLD{o.id}</span>
-                    <span className="order-date">{new Date(o.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                  </div>
-                  <span className={`status ${statusTone[o.status] || ''}`}>{statusLabel[o.status] || o.status}</span>
-                </div>
-                <div className="order-items">
-                  {o.items.map((item) => (
-                    <div className="order-item" key={item.id}>
-                      {item.product_image && <img src={item.product_image} alt={item.product_name} />}
-                      <div>
-                        <p>{item.product_name}</p>
-                        <span>Qty {item.qty} · {formatINR(item.price)}</span>
-                      </div>
+            {orders.map((o) => {
+              const canCancel = (o.status === 'paid' || o.status === 'paid_oversold') && tierFor(o);
+              return (
+                <div className="order-card" key={o.id}>
+                  <div className="order-card-head">
+                    <div>
+                      <span className="order-id">#MLD{o.id}</span>
+                      <span className="order-date">{new Date(o.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                     </div>
-                  ))}
-                </div>
-                <div className="order-card-foot">
-                  <div className="order-address">
-                    Shipping to {o.address_line1}, {o.address_city} — {o.address_pincode}
+                    <span className={`status ${statusTone[o.status] || ''}`}>{statusLabel[o.status] || o.status}</span>
                   </div>
-                  <div className="order-total">
-                    Total <strong>{formatINR(o.subtotal)}</strong>
-                    {o.razorpay_payment_id && <span className="payment-id">Payment ID: {o.razorpay_payment_id}</span>}
+                  <div className="order-items">
+                    {o.items.map((item) => (
+                      <div className="order-item" key={item.id}>
+                        {item.product_image && <img src={item.product_image} alt={item.product_name} />}
+                        <div>
+                          <p>{item.product_name}</p>
+                          <span>Qty {item.qty} · {formatINR(item.price)}</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
+                  <div className="order-card-foot">
+                    <div className="order-address">
+                      Shipping to {o.address_line1}, {o.address_city} — {o.address_pincode}
+                    </div>
+                    <div className="order-total">
+                      Total <strong>{formatINR(o.subtotal - (o.discount || 0))}</strong>
+                      {o.razorpay_payment_id && <span className="payment-id">Payment ID: {o.razorpay_payment_id}</span>}
+                    </div>
+                  </div>
+
+                  {o.status === 'cancelled' && o.refund_percent != null && (
+                    <p className="refund-note">
+                      Cancelled — {o.refund_percent}% refund ({formatINR(o.refund_amount || 0)}) will be credited to your original payment method.
+                    </p>
+                  )}
+
+                  {canCancel && (
+                    <button
+                      type="button"
+                      className="btn btn-outline cancel-btn"
+                      disabled={cancellingId === o.id}
+                      onClick={() => handleCancel(o)}
+                    >
+                      {cancellingId === o.id ? 'Cancelling…' : 'Cancel Order'}
+                    </button>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -91,7 +151,7 @@ export default function Orders() {
         .page-head h1 { font-size: 34px; margin: 8px 0 12px; }
         .page-sub { font-size: 13.5px; color: var(--ink-400); line-height: 1.6; }
         .empty-msg { font-size: 14px; color: var(--ink-400); padding: 40px 0; }
-        .empty-msg.error { color: #a13a3a; }
+        .empty-msg.error { color: #a13a3a; padding: 0 0 20px; }
 
         .orders-list { display: flex; flex-direction: column; gap: 18px; }
         .order-card {
@@ -119,6 +179,7 @@ export default function Orders() {
         .tone-delivered { background: #e8f2e6; color: #3c7a3c; }
         .tone-processing { background: var(--blush-300); color: var(--maroon-900); }
         .tone-failed { background: #f6e3e3; color: #a13a3a; }
+        .tone-cancelled { background: var(--stone-200); color: var(--ink-600); }
 
         .order-items { display: flex; flex-direction: column; gap: 10px; }
         .order-item { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
@@ -140,6 +201,9 @@ export default function Orders() {
         .order-total { text-align: right; }
         .order-total strong { color: var(--maroon-900); font-size: 15px; }
         .payment-id { display: block; font-size: 11px; color: var(--ink-400); margin-top: 2px; }
+
+        .refund-note { font-size: 12px; color: #3c7a3c; margin: 12px 0 0; }
+        .cancel-btn { margin-top: 14px; font-size: 12.5px; padding: 9px 18px; }
 
         @media (max-width: 600px) {
           .order-card-foot { flex-direction: column; align-items: flex-start; }

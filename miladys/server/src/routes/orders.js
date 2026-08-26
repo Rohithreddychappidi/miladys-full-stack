@@ -4,6 +4,7 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { razorpay, razorpayEnabled, verifyPaymentSignature } from '../lib/razorpay.js';
 import { sendOrderConfirmationEmail } from '../lib/email.js';
 import { findUsableCoupon, computeDiscount } from './coupons.js';
+import { findApplicableTier } from './cancellationPolicy.js';
 
 const router = Router();
 
@@ -176,6 +177,64 @@ router.post('/verify', requireAuth, async (req, res) => {
   sendOrderConfirmationEmail(userRows[0], order, items).catch(() => {});
 
   res.json({ ok: true, order, items });
+});
+
+// POST /api/orders/:id/cancel — self-service cancellation for the order's
+// owner. Refund percentage comes entirely from the admin-editable
+// cancellation_policy table, evaluated against whole days since payment.
+router.post('/:id/cancel', requireAuth, async (req, res) => {
+  const { rows } = await query('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+  const order = rows[0];
+  if (!order) return res.status(404).json({ error: 'Order not found.' });
+  if (order.status !== 'paid' && order.status !== 'paid_oversold') {
+    return res.status(400).json({ error: 'Only paid orders can be cancelled.' });
+  }
+
+  const daysSincePaid = order.paid_at ? Math.floor((Date.now() - new Date(order.paid_at).getTime()) / 86400000) : 0;
+  const tier = await findApplicableTier(daysSincePaid);
+  if (!tier) {
+    return res.status(400).json({ error: 'This order is past the cancellation window and can no longer be cancelled here — please contact support.' });
+  }
+
+  const payable = order.subtotal - (order.discount || 0);
+  const refundAmount = Math.round((payable * tier.refund_percent) / 100);
+
+  const { rows: items } = await query('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Put the stock back — a cancelled order frees up the units it held.
+    for (const item of items) {
+      await client.query('UPDATE products SET stock = stock + $1 WHERE id = $2', [item.qty, item.product_id]);
+    }
+    await client.query(
+      `UPDATE orders SET status = 'cancelled', cancelled_at = now(), refund_percent = $1, refund_amount = $2 WHERE id = $3`,
+      [tier.refund_percent, refundAmount, order.id]
+    );
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[orders/cancel] failed', err);
+    return res.status(500).json({ error: 'Could not cancel the order. Please try again.' });
+  } finally {
+    client.release();
+  }
+
+  // Attempt the actual money-back via Razorpay. This is best-effort: the
+  // order is already cancelled and stock already restored above regardless
+  // of whether the refund call itself succeeds, so a Razorpay hiccup here
+  // doesn't leave the order stuck — worst case, an admin issues the refund
+  // manually from the Razorpay dashboard using the payment ID on the order.
+  if (refundAmount > 0 && razorpayEnabled && order.razorpay_payment_id) {
+    try {
+      await razorpay.payments.refund(order.razorpay_payment_id, { amount: refundAmount * 100 });
+    } catch (err) {
+      console.error('[orders/cancel] Razorpay refund failed — needs manual refund', order.id, err.message);
+    }
+  }
+
+  res.json({ ok: true, refundPercent: tier.refund_percent, refundAmount, tierLabel: tier.label });
 });
 
 // GET /api/orders — the logged-in user's own orders, with items + payment status.

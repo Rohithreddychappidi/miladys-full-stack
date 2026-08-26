@@ -49,7 +49,7 @@ const homeSections = [
     heading: 'Shop by category',
     categoryIds: ['kanjivaram', 'banarasi', 'bridal', 'organza'],
   } },
-  { key: 'promo_banner', title: 'Promo Banner', sort: 4, content: {
+  { key: 'promo_banner', title: 'Promo Banner', sort: 4, enabled: false, content: {
     heading: 'Festive edit is live',
     subheading: 'Free shipping on orders above ₹5,000.',
     ctaLabel: 'Explore now',
@@ -87,6 +87,22 @@ const homeSections = [
   } },
 ];
 
+const testimonials = [
+  { name: 'Ananya R.', rating: 5, text: "The zari work is even richer in person. Wore it for my sister's wedding and got so many compliments.", productId: 'p1', sort: 1 },
+  { name: 'Meera K.', rating: 5, text: 'Beautiful drape, true to the photos, and the pallu sits perfectly without adjusting all evening.', productId: 'p1', sort: 2 },
+  { name: 'Sowmya P.', rating: 5, text: 'This was my bridal saree and it exceeded every expectation. Worth every rupee.', productId: 'p4', sort: 1 },
+  // General homepage band — productId left blank so these rotate site-wide.
+  { name: 'Divya N.', rating: 5, text: "Fast shipping, careful packaging, and the saree itself is even more beautiful in hand. Milady's is now my go-to.", productId: null, sort: 1 },
+  { name: 'Priya S.', rating: 5, text: 'Genuinely handwoven quality at a fair price. I appreciate that they work directly with weaving families.', productId: null, sort: 2 },
+  { name: 'Kavya M.', rating: 4, text: 'Lovely collection and easy ordering experience. Would love to see more everyday cotton options.', productId: null, sort: 3 },
+];
+
+const cancellationPolicy = [
+  { label: 'Within 24 hours of payment', maxDays: 1, refundPercent: 100, sort: 1 },
+  { label: '2–3 days after payment', maxDays: 3, refundPercent: 75, sort: 2 },
+  { label: '4–7 days after payment', maxDays: 7, refundPercent: 40, sort: 3 },
+];
+
 async function main() {
   await ensureSchema();
 
@@ -110,12 +126,38 @@ async function main() {
 
   for (const s of homeSections) {
     await pool.query(
-      `INSERT INTO home_sections (section_key,title,enabled,content,sort_order) VALUES ($1,$2,TRUE,$3,$4)
+      `INSERT INTO home_sections (section_key,title,enabled,content,sort_order) VALUES ($1,$2,$5,$3,$4)
        ON CONFLICT (section_key) DO UPDATE SET title=$2, content=$3, sort_order=$4`,
-      [s.key, s.title, JSON.stringify(s.content), s.sort]
+      [s.key, s.title, JSON.stringify(s.content), s.sort, s.enabled !== false]
     );
   }
   console.log(`Seeded ${homeSections.length} home sections`);
+
+  const { rows: existingTestimonials } = await pool.query('SELECT id FROM testimonials LIMIT 1');
+  if (!existingTestimonials.length) {
+    for (const t of testimonials) {
+      await pool.query(
+        `INSERT INTO testimonials (product_id,name,rating,text,active,sort_order) VALUES ($1,$2,$3,$4,TRUE,$5)`,
+        [t.productId, t.name, t.rating, t.text, t.sort]
+      );
+    }
+    console.log(`Seeded ${testimonials.length} testimonials`);
+  } else {
+    console.log('Testimonials already exist, skipped seeding.');
+  }
+
+  const { rows: existingPolicy } = await pool.query('SELECT id FROM cancellation_policy LIMIT 1');
+  if (!existingPolicy.length) {
+    for (const t of cancellationPolicy) {
+      await pool.query(
+        `INSERT INTO cancellation_policy (label,max_days,refund_percent,sort_order) VALUES ($1,$2,$3,$4)`,
+        [t.label, t.maxDays, t.refundPercent, t.sort]
+      );
+    }
+    console.log(`Seeded ${cancellationPolicy.length} cancellation policy tiers`);
+  } else {
+    console.log('Cancellation policy already exists, skipped seeding.');
+  }
 
   const adminEmail = (process.env.ADMIN_EMAIL || 'admin@miladys.com').toLowerCase();
   const existing = await pool.query('SELECT id FROM users WHERE email=$1', [adminEmail]);

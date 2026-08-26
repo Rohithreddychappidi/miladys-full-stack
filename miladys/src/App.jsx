@@ -23,6 +23,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminHome from './pages/admin/AdminHome';
 import AdminAbout from './pages/admin/AdminAbout';
 import AdminCoupons from './pages/admin/AdminCoupons';
+import AdminCancellationPolicy from './pages/admin/AdminCancellationPolicy';
 import AdminCategories from './pages/admin/AdminCategories';
 import AdminProducts from './pages/admin/AdminProducts';
 import AdminOrders from './pages/admin/AdminOrders';
@@ -73,6 +74,7 @@ export default function App() {
             <Route path="products" element={<AdminProducts />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="coupons" element={<AdminCoupons />} />
+            <Route path="cancellation-policy" element={<AdminCancellationPolicy />} />
             <Route path="reviews" element={<AdminReviews />} />
             <Route path="testimonials" element={<AdminTestimonials />} />
           </Route>

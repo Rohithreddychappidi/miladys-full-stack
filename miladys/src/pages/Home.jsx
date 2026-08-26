@@ -5,6 +5,7 @@ import HeroSlider from '../components/HeroSlider';
 import ProductCard from '../components/ProductCard';
 import RecommendedProducts from '../components/RecommendedProducts';
 import ScrollReveal from '../components/ScrollReveal';
+import TestimonialBand from '../components/TestimonialBand';
 import TextReveal from '../components/TextReveal';
 import { api } from '../data/api';
 import { getCategories, getProducts } from '../data/store';
@@ -72,24 +73,32 @@ export default function Home() {
         <div className="hero-visual" id="page-hero">
           <HeroSlider slides={hero.slides} />
         </div>
-        <div className="container hero-content">
-          <TextReveal as="p" direction="fade" className="eyebrow">
-            {hero.eyebrow}
-          </TextReveal>
-          <TextReveal as="h1" delay={0.1} direction="left" distance={40} className="hero-title">
-            {hero.heading}
-            <span className="hero-title-script">{hero.heading2}</span>
-          </TextReveal>
-          <TextReveal as="p" delay={0.2} direction="right" distance={30} className="hero-sub">
-            {hero.subheading}
-          </TextReveal>
-          <TextReveal as="div" delay={0.3} direction="fade">
-            <Link to={hero.ctaLink || '/products'} className="btn btn-primary">{hero.ctaLabel || 'Order Now'}</Link>
-          </TextReveal>
+        <div className="hero-card-wrap">
+          <div className="container hero-card">
+            <TextReveal as="p" direction="fade" className="eyebrow">
+              {hero.eyebrow}
+            </TextReveal>
+            <TextReveal as="h1" delay={0.1} direction="left" distance={40} className="hero-title">
+              {hero.heading}
+              <span className="hero-title-script">{hero.heading2}</span>
+            </TextReveal>
+            <TextReveal as="p" delay={0.2} direction="right" distance={30} className="hero-sub">
+              {hero.subheading}
+            </TextReveal>
+            <TextReveal as="div" delay={0.3} direction="fade">
+              <Link to={hero.ctaLink || '/products'} className="btn btn-primary">{hero.ctaLabel || 'Order Now'}</Link>
+            </TextReveal>
+          </div>
         </div>
       </section>
 
       <section className="collections">
+        <div className="sparkle-bg sparkle-bg-a" aria-hidden="true">
+          <img src="/images/sparkle-bg.svg" alt="" />
+        </div>
+        <div className="sparkle-bg sparkle-bg-b" aria-hidden="true">
+          <img src="/images/sparkle-bg.svg" alt="" />
+        </div>
         <div className="container">
           <ScrollReveal>
             <CategoryShowcase categories={categories} note={showcase.note} heading={showcase.heading} />
@@ -128,6 +137,9 @@ export default function Home() {
       </section>
 
       <section className="story">
+        <div className="sparkle-bg sparkle-bg-story" aria-hidden="true">
+          <img src="/images/sparkle-bg.svg" alt="" />
+        </div>
         <div className="container story-grid">
           <ScrollReveal as="div" className="story-image" y={0} duration={1.3}>
             <img src={story.image} alt={story.heading} />
@@ -147,25 +159,39 @@ export default function Home() {
 
       <RecommendedProducts />
 
+      <TestimonialBand />
+
       <style>{`
         .hero {
           position: relative;
           background: var(--paper);
-          padding: 0 0 56px;
+          padding: 0 0 90px;
         }
         .hero-visual {
           position: relative;
         }
-        .hero-content {
-          padding-top: 46px;
-          max-width: 640px;
-          text-align: center;
-          margin: 0 auto;
+        .hero-card-wrap {
+          position: relative;
+          z-index: 2;
+          margin-top: -150px;
+          display: flex;
+          justify-content: center;
+          padding: 0 20px;
         }
-        .hero-content .eyebrow { color: var(--maroon-700); }
+        .hero-card {
+          background: var(--paper);
+          border-radius: var(--radius-lg);
+          box-shadow:
+            0 28px 64px rgba(20,4,7,0.2),
+            0 2px 0 rgba(255,255,255,0.6) inset;
+          padding: 48px 60px;
+          max-width: 720px;
+          text-align: center;
+        }
+        .hero-card .eyebrow { color: var(--maroon-700); }
         .hero-title {
           margin-top: 18px;
-          font-size: 52px;
+          font-size: 46px;
           line-height: 1.05;
           color: var(--maroon-950);
           font-weight: 400;
@@ -174,13 +200,13 @@ export default function Home() {
           display: block;
           font-family: var(--font-script);
           font-style: italic;
-          font-size: 118px;
+          font-size: 100px;
           line-height: 1;
           color: var(--maroon-700);
           margin-top: 6px;
         }
         .hero-sub {
-          margin: 26px auto 34px;
+          margin: 24px auto 30px;
           max-width: 440px;
           font-size: 15px;
           line-height: 1.7;
@@ -201,7 +227,12 @@ export default function Home() {
         }
 
         .categories { background: var(--paper); }
-        .collections { background: var(--paper); padding-top: 0; }
+        .collections { background: var(--paper); padding-top: 0; position: relative; overflow: hidden; }
+        .collections .container { position: relative; z-index: 1; }
+        .sparkle-bg { position: absolute; pointer-events: none; z-index: 0; }
+        .sparkle-bg img { width: 100%; height: auto; display: block; }
+        .sparkle-bg-a { top: 20px; left: -70px; width: 260px; opacity: 0.12; }
+        .sparkle-bg-b { bottom: -20px; right: -60px; width: 300px; opacity: 0.1; transform: rotate(18deg); }
 
         .promo-banner { background: var(--maroon-900); padding: 40px 0; }
         .promo-inner {
@@ -224,10 +255,20 @@ export default function Home() {
         .featured { background: var(--stone-100); }
 
         .story-grid {
+          position: relative;
+          z-index: 1;
           display: grid;
           grid-template-columns: 0.9fr 1.1fr;
           gap: 64px;
           align-items: center;
+        }
+        .story { position: relative; overflow: hidden; }
+        .sparkle-bg-story {
+          bottom: -60px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 460px;
+          opacity: 0.13;
         }
         .story-image {
           border-radius: var(--radius-md);
@@ -249,17 +290,20 @@ export default function Home() {
         }
 
         @media (max-width: 980px) {
-          .hero-title { font-size: 38px; }
-          .hero-title-script { font-size: 78px; }
+          .hero-title { font-size: 34px; }
+          .hero-title-script { font-size: 70px; }
+          .hero-card { padding: 36px 32px; }
+          .hero-card-wrap { margin-top: -110px; }
           .product-grid { grid-template-columns: repeat(2, 1fr); }
           .story-grid { grid-template-columns: 1fr; gap: 32px; }
           .story-image { order: -1; }
         }
         @media (max-width: 600px) {
-          .hero { padding-bottom: 40px; }
-          .hero-content { padding-top: 28px; }
-          .hero-title { font-size: 32px; }
-          .hero-title-script { font-size: 62px; }
+          .hero { padding-bottom: 56px; }
+          .hero-card-wrap { margin-top: -70px; padding: 0 14px; }
+          .hero-card { padding: 28px 22px; border-radius: var(--radius-md); }
+          .hero-title { font-size: 27px; }
+          .hero-title-script { font-size: 52px; }
           .hero-sub { margin: 16px auto 20px; }
           .promo-inner { flex-direction: column; align-items: flex-start; }
         }

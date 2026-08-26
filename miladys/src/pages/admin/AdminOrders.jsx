@@ -8,6 +8,7 @@ const statusLabels = {
   paid_oversold: 'Needs attention',
   created: 'Payment pending',
   failed: 'Failed',
+  cancelled: 'Cancelled',
 };
 
 export default function AdminOrders() {
@@ -41,6 +42,11 @@ export default function AdminOrders() {
               {o.status === 'paid_oversold' && (
                 <div className="oversold-banner">
                   ⚠ Paid after stock ran out for one or more items — check inventory and contact the customer if needed.
+                </div>
+              )}
+              {o.status === 'cancelled' && (
+                <div className="cancelled-banner">
+                  Cancelled by customer — {o.refund_percent}% refund ({formatINR(o.refund_amount || 0)}) {o.razorpay_payment_id ? 'was attempted automatically via Razorpay. Verify it went through in the Razorpay dashboard.' : 'is owed — no payment ID on file, so this needs a manual refund.'}
                 </div>
               )}
 
@@ -115,9 +121,18 @@ export default function AdminOrders() {
         .status-created { background: var(--blush-300); color: var(--maroon-900); }
         .status-failed { background: #f6e3e3; color: #a13a3a; }
         .status-paid_oversold { background: #fbeacb; color: #8a5a10; }
+        .status-cancelled { background: var(--stone-200); color: var(--ink-600); }
         .oversold-banner {
           background: #fbeacb;
           color: #8a5a10;
+          font-size: 12px;
+          padding: 8px 12px;
+          border-radius: var(--radius-sm);
+          margin-bottom: 12px;
+        }
+        .cancelled-banner {
+          background: var(--stone-100);
+          color: var(--ink-600);
           font-size: 12px;
           padding: 8px 12px;
           border-radius: var(--radius-sm);

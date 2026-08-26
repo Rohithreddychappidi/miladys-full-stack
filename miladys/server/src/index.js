@@ -11,6 +11,8 @@ import homeSectionRoutes from './routes/homeSections.js';
 import reviewRoutes from './routes/reviews.js';
 import orderRoutes from './routes/orders.js';
 import couponRoutes from './routes/coupons.js';
+import testimonialRoutes from './routes/testimonials.js';
+import cancellationPolicyRoutes from './routes/cancellationPolicy.js';
 
 const app = express();
 
@@ -46,6 +48,8 @@ app.use('/api/home-sections', homeSectionRoutes);
 app.use('/api', reviewRoutes); // mounts /api/products/:id/reviews and /api/admin/reviews
 app.use('/api/orders', orderRoutes);
 app.use('/api/coupons', couponRoutes);
+app.use('/api/testimonials', testimonialRoutes);
+app.use('/api/cancellation-policy', cancellationPolicyRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);

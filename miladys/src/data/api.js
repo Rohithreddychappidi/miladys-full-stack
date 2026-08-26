@@ -81,6 +81,20 @@ export const api = {
   createCoupon: (payload) => request('/api/coupons', { method: 'POST', body: payload }),
   updateCoupon: (id, payload) => request(`/api/coupons/${id}`, { method: 'PUT', body: payload }),
   deleteCoupon: (id) => request(`/api/coupons/${id}`, { method: 'DELETE' }),
+
+  // testimonials
+  getTestimonials: (productId) => request(`/api/testimonials${productId ? `?productId=${productId}` : ''}`, { auth: false }),
+  getAllTestimonials: () => request('/api/testimonials/admin/all'),
+  createTestimonial: (payload) => request('/api/testimonials', { method: 'POST', body: payload }),
+  updateTestimonial: (id, payload) => request(`/api/testimonials/${id}`, { method: 'PUT', body: payload }),
+  deleteTestimonial: (id) => request(`/api/testimonials/${id}`, { method: 'DELETE' }),
+
+  // cancellation policy
+  getCancellationPolicy: () => request('/api/cancellation-policy', { auth: false }),
+  createPolicyTier: (payload) => request('/api/cancellation-policy', { method: 'POST', body: payload }),
+  updatePolicyTier: (id, payload) => request(`/api/cancellation-policy/${id}`, { method: 'PUT', body: payload }),
+  deletePolicyTier: (id) => request(`/api/cancellation-policy/${id}`, { method: 'DELETE' }),
+  cancelOrder: (id) => request(`/api/orders/${id}/cancel`, { method: 'POST' }),
 };
 
 export { BASE_URL };
