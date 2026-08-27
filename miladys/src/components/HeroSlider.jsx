@@ -105,10 +105,15 @@ export default function HeroSlider({ slides: cmsSlides, mobileSlides: cmsMobileS
         .hero-slider {
           position: relative;
           width: 100%;
+          /* Using the small (fixed) viewport height instead of the dynamic
+             one is what actually fixes the "zoom" jump when scrolling on
+             mobile — 100dvh recalculates as the browser's address bar
+             shows/hides mid-scroll, which visibly resizes the hero right
+             as you scroll past it. 100svh stays fixed regardless. */
           height: 100vh;
-          height: 100dvh;
+          height: 100svh;
           min-height: 100vh;
-          min-height: 100dvh;
+          min-height: 100svh;
           overflow: hidden;
           background: var(--maroon-950);
         }
@@ -147,7 +152,7 @@ export default function HeroSlider({ slides: cmsSlides, mobileSlides: cmsMobileS
         .hero-dot.active { background: var(--ivory); width: 20px; border-radius: 999px; }
 
         @media (max-width: 600px) {
-          .hero-slider { height: 100vh; height: 100dvh; min-height: 100vh; min-height: 100dvh; }
+          .hero-slider { height: 100vh; height: 100svh; min-height: 100vh; min-height: 100svh; }
           .hero-slider-dots { bottom: 10px; }
         }
       `}</style>

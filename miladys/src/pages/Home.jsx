@@ -299,12 +299,12 @@ export default function Home() {
           .story-image { order: -1; }
         }
         @media (max-width: 600px) {
-          .hero { padding-bottom: 56px; }
-          .hero-card-wrap { margin-top: -34px; padding: 0 14px; }
-          .hero-card { padding: 28px 22px; border-radius: var(--radius-md); }
-          .hero-title { font-size: 27px; }
-          .hero-title-script { font-size: 52px; }
-          .hero-sub { margin: 16px auto 20px; }
+          .hero { padding-bottom: 44px; }
+          .hero-card-wrap { margin-top: -30px; padding: 0 14px; }
+          .hero-card { padding: 24px 20px; border-radius: var(--radius-md); }
+          .hero-title { font-size: 23px; }
+          .hero-title-script { font-size: 44px; }
+          .hero-sub { font-size: 13px; margin: 14px auto 18px; }
           .promo-inner { flex-direction: column; align-items: flex-start; }
         }
       `}</style>

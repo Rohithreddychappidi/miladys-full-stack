@@ -140,21 +140,25 @@ export default function CategoryShowcase({ categories, note, heading }) {
 
       {isMobile ? (
         <div className="showcase-scroll" ref={scrollRef}>
-          {categories.map((c, i) => (
-            <Link
-              key={c.id}
-              ref={(el) => { cardRefs.current[i] = el; }}
-              to={`/products?category=${c.id}`}
-              className={`showcase-scroll-card ${i === focusIndex ? 'is-focus' : ''}`}
-              style={{ animationDelay: `${Math.min(i, 6) * 70}ms` }}
-            >
-              <div className="showcase-card-lift">
-                <img src={c.image} alt="" />
-                <span className="showcase-card-overlay" />
-                <span className="showcase-card-name">{c.name}</span>
-              </div>
-            </Link>
-          ))}
+          {categories.map((c, i) => {
+            const dist = Math.min(Math.abs(i - focusIndex), 3);
+            return (
+              <Link
+                key={c.id}
+                ref={(el) => { cardRefs.current[i] = el; }}
+                to={`/products?category=${c.id}`}
+                className={`showcase-scroll-card ${i === focusIndex ? 'is-focus' : ''}`}
+                data-dist={dist}
+                style={{ animationDelay: `${Math.min(i, 6) * 70}ms` }}
+              >
+                <div className="showcase-card-lift">
+                  <img src={c.image} alt="" />
+                  <span className="showcase-card-overlay" />
+                  <span className="showcase-card-name">{c.name}</span>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       ) : (
         <div
@@ -325,10 +329,9 @@ export default function CategoryShowcase({ categories, note, heading }) {
           overflow-x: auto;
           overflow-y: visible;
           -webkit-overflow-scrolling: touch;
-          scroll-snap-type: x proximity;
-          scroll-padding: 0 16px;
-          padding: 4px 4px 14px;
-          margin: 0 -4px;
+          scroll-snap-type: x mandatory;
+          scroll-padding-inline: calc(50% - 75px);
+          padding: 4px calc(50% - 75px) 14px;
           scrollbar-width: none;
         }
         .showcase-scroll::-webkit-scrollbar {
@@ -341,7 +344,8 @@ export default function CategoryShowcase({ categories, note, heading }) {
           height: 220px;
           border-radius: 15px;
           overflow: hidden;
-          scroll-snap-align: start;
+          scroll-snap-align: center;
+          scroll-snap-stop: always;
           box-shadow: 0 10px 24px rgba(72,24,30,0.18);
           opacity: 0;
           border: 2px solid transparent;
@@ -355,13 +359,20 @@ export default function CategoryShowcase({ categories, note, heading }) {
         @media (prefers-reduced-motion: reduce) {
           .showcase-scroll-card { animation: none; opacity: 1; }
         }
+        /* Scale/fade falloff by distance from the centered card — the same
+           shape as the desktop rail's offset formula, just driven by scroll
+           position instead of cursor position. Applied to the inner layer
+           (not the outer card that owns the entrance animation above) so
+           the two don't fight over the same transform. */
         .showcase-scroll-card .showcase-card-lift {
-          transition: none;
+          transition: transform 0.35s cubic-bezier(0.19,1,0.22,1), opacity 0.35s ease, box-shadow 0.35s ease;
         }
+        .showcase-scroll-card[data-dist="0"] .showcase-card-lift { transform: scale(1); opacity: 1; }
+        .showcase-scroll-card[data-dist="1"] .showcase-card-lift { transform: scale(0.91); opacity: 0.8; }
+        .showcase-scroll-card[data-dist="2"] .showcase-card-lift { transform: scale(0.85); opacity: 0.6; }
+        .showcase-scroll-card[data-dist="3"] .showcase-card-lift { transform: scale(0.8); opacity: 0.45; }
         /* Whichever card sits centered in the strip gets the same gentle
-           bounce as the desktop rail's focused card. Animates the inner
-           layer only, so it never fights the entrance animation on the
-           outer card element above. */
+           bounce as the desktop rail's focused card. */
         .showcase-scroll-card.is-focus {
           border-color: var(--maroon-900);
           box-shadow: 0 16px 32px rgba(72,24,30,0.3);
@@ -398,8 +409,12 @@ export default function CategoryShowcase({ categories, note, heading }) {
           .showcase-rail-inner { transform: scale(0.86); }
         }
         @media (max-width: 600px) {
-          .showcase { padding: 32px 16px 26px; }
-          .showcase-title { font-size: 27px; }
+          .showcase { padding: 26px 14px 22px; }
+          .showcase-title { font-size: 23px; }
+          .showcase-note { font-size: 12px; max-width: 200px; }
+          .showcase-scroll { padding-inline: calc(50% - 66px); scroll-padding-inline: calc(50% - 66px); }
+          .showcase-scroll-card { width: 132px; height: 194px; }
+          .showcase-explore { padding: 11px 24px; font-size: 13px; margin-top: 26px; }
         }
       `}</style>
     </div>

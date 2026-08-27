@@ -134,6 +134,15 @@ section { padding: 88px 0; }
   body { padding-bottom: 78px; }
 }
 
+/* A general density pass for phones — smaller type and tighter spacing so
+   the site reads like a real mobile app instead of a shrunk desktop page. */
+@media (max-width: 600px) {
+  section { padding: 40px 0; }
+  .container { padding: 0 16px; }
+  .btn { padding: 12px 26px; font-size: 13px; }
+  .eyebrow { font-size: 11px; letter-spacing: 0.18em; }
+}
+
 /* focus visibility */
 a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible {
   outline: 2px solid var(--gold-500);

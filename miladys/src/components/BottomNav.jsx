@@ -77,18 +77,18 @@ export default function BottomNav() {
             right: 0;
             bottom: 0;
             z-index: 80;
-            padding: 0 30px calc(14px + env(safe-area-inset-bottom, 0px));
+            padding: 0 24px calc(10px + env(safe-area-inset-bottom, 0px));
             pointer-events: none;
           }
           .bottom-nav-glass {
             pointer-events: auto;
             margin: 0 auto;
-            max-width: 340px;
+            max-width: 380px;
             display: flex;
             align-items: center;
             justify-content: space-around;
-            gap: 2px;
-            padding: 9px 10px;
+            gap: 4px;
+            padding: 6px 14px;
             border-radius: 999px;
             background: rgba(58, 14, 21, 0.62);
             backdrop-filter: blur(18px) saturate(160%);
@@ -101,9 +101,9 @@ export default function BottomNav() {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 3px;
+            gap: 2px;
             color: var(--blush-300);
-            padding: 6px 9px;
+            padding: 5px 14px;
             border-radius: 999px;
             transition: color 0.2s ease, background 0.2s ease;
           }
@@ -114,13 +114,13 @@ export default function BottomNav() {
           .bottom-nav-link.active .bottom-nav-icon::before {
             content: '';
             position: absolute;
-            inset: -10px;
+            inset: -8px;
             border-radius: 999px;
             background: radial-gradient(circle, rgba(232,196,183,0.6) 0%, rgba(232,196,183,0.18) 55%, rgba(232,196,183,0) 75%);
             z-index: -1;
           }
-          .bottom-nav-icon svg { width: 21px; height: 21px; }
-          .bottom-nav-label { font-size: 10px; letter-spacing: 0.03em; font-weight: 500; }
+          .bottom-nav-icon svg { width: 18px; height: 18px; }
+          .bottom-nav-label { font-size: 9px; letter-spacing: 0.03em; font-weight: 500; }
           .bottom-nav-badge {
             position: absolute;
             top: -6px;
