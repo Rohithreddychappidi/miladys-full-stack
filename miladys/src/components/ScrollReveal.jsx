@@ -42,7 +42,16 @@ export default function ScrollReveal({
       { threshold, rootMargin },
     );
     observer.observe(el);
-    return () => observer.disconnect();
+    // Safety net: some mobile browsers/edge cases can fail to fire the
+    // observer callback (e.g. an element already in view at a viewport
+    // size the browser reports inconsistently during load). Content should
+    // never stay invisible forever because of that, so reveal anyway after
+    // a short delay if the observer hasn't already done it.
+    const fallback = setTimeout(() => setVisible(true), 2000);
+    return () => {
+      observer.disconnect();
+      clearTimeout(fallback);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

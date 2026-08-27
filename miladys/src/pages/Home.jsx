@@ -71,7 +71,7 @@ export default function Home() {
     <div className="home">
       <section className="hero">
         <div className="hero-visual" id="page-hero">
-          <HeroSlider slides={hero.slides} />
+          <HeroSlider slides={hero.slides} mobileSlides={hero.mobileSlides} />
         </div>
         <div className="hero-card-wrap">
           <div className="container hero-card">
@@ -173,7 +173,7 @@ export default function Home() {
         .hero-card-wrap {
           position: relative;
           z-index: 2;
-          margin-top: -150px;
+          margin-top: -80px;
           display: flex;
           justify-content: center;
           padding: 0 20px;
@@ -293,14 +293,14 @@ export default function Home() {
           .hero-title { font-size: 34px; }
           .hero-title-script { font-size: 70px; }
           .hero-card { padding: 36px 32px; }
-          .hero-card-wrap { margin-top: -110px; }
+          .hero-card-wrap { margin-top: -56px; }
           .product-grid { grid-template-columns: repeat(2, 1fr); }
           .story-grid { grid-template-columns: 1fr; gap: 32px; }
           .story-image { order: -1; }
         }
         @media (max-width: 600px) {
           .hero { padding-bottom: 56px; }
-          .hero-card-wrap { margin-top: -70px; padding: 0 14px; }
+          .hero-card-wrap { margin-top: -34px; padding: 0 14px; }
           .hero-card { padding: 28px 22px; border-radius: var(--radius-md); }
           .hero-title { font-size: 27px; }
           .hero-title-script { font-size: 52px; }

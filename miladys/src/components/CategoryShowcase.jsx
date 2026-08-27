@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import ScrollReveal from './ScrollReveal';
 import TextReveal from './TextReveal';
 
 const LERP = 0.06;
@@ -9,12 +8,14 @@ const MOBILE_BREAKPOINT = 768;
 
 export default function CategoryShowcase({ categories, note, heading }) {
   const railRef = useRef(null);
+  const scrollRef = useRef(null);
   const posRef = useRef(0);
   const targetRef = useRef(0);
   const cursorDxRef = useRef(0);
   const hoveringRef = useRef(false);
   const rafRef = useRef(null);
   const [renderPos, setRenderPos] = useState(0);
+  const [mobileVisible, setMobileVisible] = useState(false);
   const [isMobile, setIsMobile] = useState(
     typeof window !== 'undefined' ? window.innerWidth <= MOBILE_BREAKPOINT : false,
   );
@@ -29,6 +30,41 @@ export default function CategoryShowcase({ categories, note, heading }) {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Single observer for the whole mobile card row, rather than one per
+  // card — more reliable across mobile browsers, and the stagger is done
+  // purely with CSS transition-delay once this fires.
+  useEffect(() => {
+    if (!isMobile) return undefined;
+    const el = scrollRef.current;
+    if (!el) return undefined;
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) {
+      setMobileVisible(true);
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setMobileVisible(true);
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.05 },
+    );
+    observer.observe(el);
+    // Safety net: if the section is already on-screen at mount (short
+    // pages, tall phones) and the observer doesn't fire in time, reveal
+    // anyway after a short delay rather than leaving cards invisible.
+    const fallback = setTimeout(() => setMobileVisible(true), 1200);
+    return () => {
+      observer.disconnect();
+      clearTimeout(fallback);
+    };
+  }, [isMobile]);
 
   useEffect(() => {
     // On mobile there's no cursor and the constant auto-drift only makes it
@@ -90,26 +126,20 @@ export default function CategoryShowcase({ categories, note, heading }) {
       </div>
 
       {isMobile ? (
-        <div className="showcase-scroll">
+        <div className={`showcase-scroll ${mobileVisible ? 'is-visible' : ''}`} ref={scrollRef}>
           {categories.map((c, i) => (
-            <ScrollReveal
+            <Link
               key={c.id}
-              as="div"
-              y={26}
-              duration={0.9}
-              delay={Math.min(i, 5) * 0.09}
-              threshold={0.2}
-              rootMargin="0px 0px -8% 0px"
-              className="showcase-scroll-reveal"
+              to={`/products?category=${c.id}`}
+              className="showcase-scroll-card"
+              style={{ transitionDelay: `${Math.min(i, 6) * 80}ms` }}
             >
-              <Link to={`/products?category=${c.id}`} className="showcase-scroll-card">
-                <div className="showcase-card-lift">
-                  <img src={c.image} alt="" />
-                  <span className="showcase-card-overlay" />
-                  <span className="showcase-card-name">{c.name}</span>
-                </div>
-              </Link>
-            </ScrollReveal>
+              <div className="showcase-card-lift">
+                <img src={c.image} alt="" />
+                <span className="showcase-card-overlay" />
+                <span className="showcase-card-name">{c.name}</span>
+              </div>
+            </Link>
           ))}
         </div>
       ) : (
@@ -279,7 +309,7 @@ export default function CategoryShowcase({ categories, note, heading }) {
           display: flex;
           gap: 14px;
           overflow-x: auto;
-          overflow-y: hidden;
+          overflow-y: visible;
           -webkit-overflow-scrolling: touch;
           scroll-snap-type: x proximity;
           scroll-padding: 0 16px;
@@ -299,12 +329,16 @@ export default function CategoryShowcase({ categories, note, heading }) {
           overflow: hidden;
           scroll-snap-align: start;
           box-shadow: 0 10px 24px rgba(72,24,30,0.18);
+          opacity: 0;
+          transform: translateY(26px);
+          transition: opacity 0.7s ease-out, transform 0.7s cubic-bezier(0.19,1,0.22,1);
+        }
+        .showcase-scroll.is-visible .showcase-scroll-card {
+          opacity: 1;
+          transform: translateY(0);
         }
         .showcase-scroll-card .showcase-card-lift {
           transition: none;
-        }
-        .showcase-scroll-reveal {
-          flex: 0 0 auto;
         }
 
         .showcase-explore {

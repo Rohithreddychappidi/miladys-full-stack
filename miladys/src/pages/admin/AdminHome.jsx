@@ -60,7 +60,7 @@ function readFileAsDataUrl(file) {
   });
 }
 
-function HeroSlidesEditor({ slides = [], onChange }) {
+function HeroSlidesEditor({ slides = [], onChange, sizeHint }) {
   const photoInput = useRef(null);
   const videoInput = useRef(null);
   const [busy, setBusy] = useState(false);
@@ -84,6 +84,7 @@ function HeroSlidesEditor({ slides = [], onChange }) {
 
   return (
     <div className="slides-editor">
+      {sizeHint && <p className="field-hint size-hint">📐 Recommended size: <strong>{sizeHint}</strong></p>}
       <p className="field-hint">
         These play in order on the home page banner. Mix photos and short video clips (a few seconds, no sound needed — it plays muted).
         Large videos make the page slow to load, so keep clips short and compressed.
@@ -117,7 +118,7 @@ function HeroSlidesEditor({ slides = [], onChange }) {
       </div>
 
       {slides.length === 0 && (
-        <p className="field-hint" style={{ marginTop: 8 }}>No banners uploaded yet — the home page will show the default built-in banner until you add at least one.</p>
+        <p className="field-hint" style={{ marginTop: 8 }}>No banners uploaded yet{sizeHint ? ' for this view' : ''} — the home page will show the default built-in banner until you add at least one.</p>
       )}
     </div>
   );
@@ -225,13 +226,25 @@ export default function AdminHome() {
               ))}
 
               {s.section_key === 'hero' && (
-                <label className="field-label">
-                  Banner photos &amp; videos
-                  <HeroSlidesEditor
-                    slides={draft.slides || []}
-                    onChange={(slides) => updateField('hero', 'slides', slides)}
-                  />
-                </label>
+                <>
+                  <label className="field-label">
+                    Banner photos &amp; videos — Desktop / PC view
+                    <HeroSlidesEditor
+                      slides={draft.slides || []}
+                      onChange={(slides) => updateField('hero', 'slides', slides)}
+                      sizeHint="1920 × 1080px (landscape, 16:9) or similar wide crop"
+                    />
+                  </label>
+
+                  <label className="field-label">
+                    Banner photos &amp; videos — Mobile view
+                    <HeroSlidesEditor
+                      slides={draft.mobileSlides || []}
+                      onChange={(slides) => updateField('hero', 'mobileSlides', slides)}
+                      sizeHint="1080 × 1350px (portrait, 4:5) — a tall crop reads better on phones"
+                    />
+                  </label>
+                </>
               )}
 
               {s.section_key === 'story' && (
@@ -284,6 +297,7 @@ export default function AdminHome() {
           font-size: 13.5px;
         }
         .field-hint { font-size: 11.5px; color: var(--ink-400); line-height: 1.6; margin: 0; }
+        .size-hint { color: var(--maroon-700); background: var(--blush-300); padding: 7px 10px; border-radius: var(--radius-sm); }
 
         .story-preview { width: 90px; height: 90px; border-radius: var(--radius-sm); overflow: hidden; margin-top: 4px; }
         .story-preview img { width: 100%; height: 100%; object-fit: cover; }

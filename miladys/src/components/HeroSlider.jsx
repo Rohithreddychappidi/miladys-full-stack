@@ -6,13 +6,29 @@ const defaultSlides = [
   { id: 3, type: 'image', src: 'https://images.unsplash.com/photo-1518893063132-36e46dbe2428?auto=format&fit=crop&w=1800&h=760&q=80', alt: 'Rich red silk textile' },
 ];
 
-export default function HeroSlider({ slides: cmsSlides }) {
-  // CMS slides (uploaded from the admin panel) take over when present;
-  // otherwise fall back to the built-in defaults so the hero never renders
-  // empty before the CMS data has loaded (or if none was ever uploaded).
+export default function HeroSlider({ slides: cmsSlides, mobileSlides: cmsMobileSlides }) {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth <= 640 : false,
+  );
+
+  useEffect(() => {
+    function onResize() {
+      setIsMobile(window.innerWidth <= 640);
+    }
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  // Mobile slides (uploaded separately in the admin panel) take over on
+  // narrow viewports when present; otherwise fall back to the desktop set,
+  // and finally to the built-in defaults so the hero never renders empty.
+  const activeCmsSlides = isMobile && Array.isArray(cmsMobileSlides) && cmsMobileSlides.length
+    ? cmsMobileSlides
+    : cmsSlides;
+
   const slides =
-    Array.isArray(cmsSlides) && cmsSlides.length
-      ? cmsSlides.map((s, i) => ({ id: i, type: s.type, src: s.url, alt: 'Milady\'s' }))
+    Array.isArray(activeCmsSlides) && activeCmsSlides.length
+      ? activeCmsSlides.map((s, i) => ({ id: i, type: s.type, src: s.url, alt: 'Milady\'s' }))
       : defaultSlides;
 
   const [active, setActive] = useState(0);

@@ -55,7 +55,12 @@ export default function TextReveal({
       { threshold, rootMargin },
     );
     observer.observe(el);
-    return () => observer.disconnect();
+    // Safety net — see ScrollReveal.jsx for why this exists.
+    const fallback = setTimeout(() => setVisible(true), 2000);
+    return () => {
+      observer.disconnect();
+      clearTimeout(fallback);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
