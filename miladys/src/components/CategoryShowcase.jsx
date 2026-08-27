@@ -8,12 +8,16 @@ const MOBILE_BREAKPOINT = 768;
 
 export default function CategoryShowcase({ categories, note, heading }) {
   const railRef = useRef(null);
+  const scrollRef = useRef(null);
+  const cardRefs = useRef([]);
   const posRef = useRef(0);
   const targetRef = useRef(0);
   const cursorDxRef = useRef(0);
   const hoveringRef = useRef(false);
   const rafRef = useRef(null);
+  const scrollRafRef = useRef(null);
   const [renderPos, setRenderPos] = useState(0);
+  const [focusIndex, setFocusIndex] = useState(0);
   const [isMobile, setIsMobile] = useState(
     typeof window !== 'undefined' ? window.innerWidth <= MOBILE_BREAKPOINT : false,
   );
@@ -47,6 +51,52 @@ export default function CategoryShowcase({ categories, note, heading }) {
     rafRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(rafRef.current);
   }, [isMobile]);
+
+  // Mobile equivalent of the desktop "focus card" pop: whichever card sits
+  // nearest the horizontal center of the scroll strip gets the gentle
+  // bounce, updated as the person swipes. Plain scroll-position math, not
+  // IntersectionObserver — a native 'scroll' event always fires reliably.
+  useEffect(() => {
+    if (!isMobile) return undefined;
+    const el = scrollRef.current;
+    if (!el) return undefined;
+
+    function updateFocus() {
+      const containerRect = el.getBoundingClientRect();
+      const containerCenter = containerRect.left + containerRect.width / 2;
+      let closest = 0;
+      let closestDist = Infinity;
+      cardRefs.current.forEach((card, i) => {
+        if (!card) return;
+        const rect = card.getBoundingClientRect();
+        const cardCenter = rect.left + rect.width / 2;
+        const dist = Math.abs(cardCenter - containerCenter);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closest = i;
+        }
+      });
+      setFocusIndex(closest);
+    }
+
+    function onScroll() {
+      if (scrollRafRef.current) return;
+      scrollRafRef.current = requestAnimationFrame(() => {
+        scrollRafRef.current = null;
+        updateFocus();
+      });
+    }
+
+    // Run once after the entrance animation/layout settles, then on every
+    // scroll of the strip.
+    const initial = setTimeout(updateFocus, 350);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      clearTimeout(initial);
+      el.removeEventListener('scroll', onScroll);
+      if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
+    };
+  }, [isMobile, count]);
 
   if (!count) return null;
 
@@ -89,12 +139,13 @@ export default function CategoryShowcase({ categories, note, heading }) {
       </div>
 
       {isMobile ? (
-        <div className="showcase-scroll">
+        <div className="showcase-scroll" ref={scrollRef}>
           {categories.map((c, i) => (
             <Link
               key={c.id}
+              ref={(el) => { cardRefs.current[i] = el; }}
               to={`/products?category=${c.id}`}
-              className="showcase-scroll-card"
+              className={`showcase-scroll-card ${i === focusIndex ? 'is-focus' : ''}`}
               style={{ animationDelay: `${Math.min(i, 6) * 70}ms` }}
             >
               <div className="showcase-card-lift">
@@ -293,7 +344,9 @@ export default function CategoryShowcase({ categories, note, heading }) {
           scroll-snap-align: start;
           box-shadow: 0 10px 24px rgba(72,24,30,0.18);
           opacity: 0;
+          border: 2px solid transparent;
           animation: showcaseCardIn 0.6s cubic-bezier(0.19,1,0.22,1) forwards;
+          transition: border-color 0.25s ease, box-shadow 0.25s ease;
         }
         @keyframes showcaseCardIn {
           from { opacity: 0; transform: translateY(20px); }
@@ -304,6 +357,17 @@ export default function CategoryShowcase({ categories, note, heading }) {
         }
         .showcase-scroll-card .showcase-card-lift {
           transition: none;
+        }
+        /* Whichever card sits centered in the strip gets the same gentle
+           bounce as the desktop rail's focused card. Animates the inner
+           layer only, so it never fights the entrance animation on the
+           outer card element above. */
+        .showcase-scroll-card.is-focus {
+          border-color: var(--maroon-900);
+          box-shadow: 0 16px 32px rgba(72,24,30,0.3);
+        }
+        .showcase-scroll-card.is-focus .showcase-card-lift {
+          animation: showcasePop 2.2s ease-in-out infinite;
         }
 
         .showcase-explore {
