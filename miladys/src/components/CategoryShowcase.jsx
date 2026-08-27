@@ -8,14 +8,12 @@ const MOBILE_BREAKPOINT = 768;
 
 export default function CategoryShowcase({ categories, note, heading }) {
   const railRef = useRef(null);
-  const scrollRef = useRef(null);
   const posRef = useRef(0);
   const targetRef = useRef(0);
   const cursorDxRef = useRef(0);
   const hoveringRef = useRef(false);
   const rafRef = useRef(null);
   const [renderPos, setRenderPos] = useState(0);
-  const [mobileVisible, setMobileVisible] = useState(false);
   const [isMobile, setIsMobile] = useState(
     typeof window !== 'undefined' ? window.innerWidth <= MOBILE_BREAKPOINT : false,
   );
@@ -30,41 +28,6 @@ export default function CategoryShowcase({ categories, note, heading }) {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-
-  // Single observer for the whole mobile card row, rather than one per
-  // card — more reliable across mobile browsers, and the stagger is done
-  // purely with CSS transition-delay once this fires.
-  useEffect(() => {
-    if (!isMobile) return undefined;
-    const el = scrollRef.current;
-    if (!el) return undefined;
-
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) {
-      setMobileVisible(true);
-      return undefined;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setMobileVisible(true);
-            observer.unobserve(entry.target);
-          }
-        });
-      },
-      { threshold: 0.05 },
-    );
-    observer.observe(el);
-    // Safety net: if the section is already on-screen at mount (short
-    // pages, tall phones) and the observer doesn't fire in time, reveal
-    // anyway after a short delay rather than leaving cards invisible.
-    const fallback = setTimeout(() => setMobileVisible(true), 1200);
-    return () => {
-      observer.disconnect();
-      clearTimeout(fallback);
-    };
-  }, [isMobile]);
 
   useEffect(() => {
     // On mobile there's no cursor and the constant auto-drift only makes it
@@ -126,13 +89,13 @@ export default function CategoryShowcase({ categories, note, heading }) {
       </div>
 
       {isMobile ? (
-        <div className={`showcase-scroll ${mobileVisible ? 'is-visible' : ''}`} ref={scrollRef}>
+        <div className="showcase-scroll">
           {categories.map((c, i) => (
             <Link
               key={c.id}
               to={`/products?category=${c.id}`}
               className="showcase-scroll-card"
-              style={{ transitionDelay: `${Math.min(i, 6) * 80}ms` }}
+              style={{ animationDelay: `${Math.min(i, 6) * 70}ms` }}
             >
               <div className="showcase-card-lift">
                 <img src={c.image} alt="" />
@@ -330,12 +293,14 @@ export default function CategoryShowcase({ categories, note, heading }) {
           scroll-snap-align: start;
           box-shadow: 0 10px 24px rgba(72,24,30,0.18);
           opacity: 0;
-          transform: translateY(26px);
-          transition: opacity 0.7s ease-out, transform 0.7s cubic-bezier(0.19,1,0.22,1);
+          animation: showcaseCardIn 0.6s cubic-bezier(0.19,1,0.22,1) forwards;
         }
-        .showcase-scroll.is-visible .showcase-scroll-card {
-          opacity: 1;
-          transform: translateY(0);
+        @keyframes showcaseCardIn {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .showcase-scroll-card { animation: none; opacity: 1; }
         }
         .showcase-scroll-card .showcase-card-lift {
           transition: none;
