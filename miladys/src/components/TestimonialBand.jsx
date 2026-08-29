@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../data/api';
 
+const SWIPE_THRESHOLD = 40; // px of horizontal drag before it counts as a swipe
+
 export default function TestimonialBand() {
   const [testimonials, setTestimonials] = useState([]);
   const [active, setActive] = useState(0);
   const [fading, setFading] = useState(false);
   const timerRef = useRef(null);
+  const boxRef = useRef(null);
+  const dragRef = useRef({ startX: 0, dx: 0, dragging: false });
 
   useEffect(() => {
     api.getTestimonials().then(({ testimonials }) => setTestimonials(testimonials)).catch(() => {});
@@ -32,7 +36,32 @@ export default function TestimonialBand() {
 
   function goToIndex(i) {
     clearInterval(timerRef.current);
-    goTo(i);
+    goTo(((i % testimonials.length) + testimonials.length) % testimonials.length);
+  }
+
+  function step(dir) {
+    goToIndex(active + dir);
+  }
+
+  // Swipe/drag support — every testimonial the admin has added is reachable
+  // by swiping left or right, not just by clicking a dot. Pauses auto-play
+  // for the drag; the interval effect above restarts it on the next index
+  // change since goToIndex clears the running timer.
+  function onPointerDown(e) {
+    if (testimonials.length < 2) return;
+    dragRef.current = { startX: e.clientX, dx: 0, dragging: true };
+    boxRef.current?.setPointerCapture?.(e.pointerId);
+  }
+  function onPointerMove(e) {
+    if (!dragRef.current.dragging) return;
+    dragRef.current.dx = e.clientX - dragRef.current.startX;
+  }
+  function onPointerUp() {
+    if (!dragRef.current.dragging) return;
+    const { dx } = dragRef.current;
+    dragRef.current.dragging = false;
+    if (dx > SWIPE_THRESHOLD) step(-1);
+    else if (dx < -SWIPE_THRESHOLD) step(1);
   }
 
   if (!testimonials.length) return null;
@@ -42,7 +71,20 @@ export default function TestimonialBand() {
   return (
     <section className="testimonial-band">
       <div className="container">
-        <div className="band-box">
+        <div
+          className="band-box"
+          ref={boxRef}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+        >
+          {testimonials.length > 1 && (
+            <button type="button" className="band-arrow band-arrow-prev" onClick={() => step(-1)} aria-label="Previous testimonial">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+          )}
+
           <div className={`band-copy ${fading ? 'is-fading' : ''}`}>
             <div className="band-stars" aria-label={`${t.rating} out of 5 stars`}>
               {Array.from({ length: 5 }).map((_, i) => (
@@ -60,6 +102,12 @@ export default function TestimonialBand() {
               <div className="band-photo band-photo-fallback">{t.name.charAt(0)}</div>
             )}
           </div>
+
+          {testimonials.length > 1 && (
+            <button type="button" className="band-arrow band-arrow-next" onClick={() => step(1)} aria-label="Next testimonial">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+          )}
 
           {testimonials.length > 1 && (
             <div className="band-dots">
@@ -85,13 +133,16 @@ export default function TestimonialBand() {
           background: var(--paper);
           border-radius: var(--radius-lg);
           box-shadow: 0 16px 40px rgba(36,26,23,0.1);
-          padding: 44px 56px 52px;
+          padding: 44px 76px 52px;
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 36px;
           min-height: 168px;
           overflow: hidden;
+          touch-action: pan-y;
+          cursor: grab;
+          user-select: none;
         }
         .band-copy {
           flex: 1;
@@ -141,6 +192,27 @@ export default function TestimonialBand() {
           font-size: 32px;
         }
 
+        .band-arrow {
+          position: absolute;
+          top: 50%;
+          transform: translateY(-50%);
+          z-index: 2;
+          width: 34px;
+          height: 34px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: var(--stone-100);
+          border: 1px solid var(--stone-200);
+          color: var(--maroon-900);
+          transition: background 0.2s ease, border-color 0.2s ease;
+        }
+        .band-arrow:hover { background: var(--blush-300); border-color: var(--blush-300); }
+        .band-arrow svg { width: 15px; height: 15px; }
+        .band-arrow-prev { left: 18px; }
+        .band-arrow-next { right: 18px; }
+
         .band-dots {
           position: absolute;
           bottom: 18px;
@@ -163,11 +235,12 @@ export default function TestimonialBand() {
           .band-box {
             flex-direction: column-reverse;
             text-align: center;
-            padding: 32px 26px 44px;
+            padding: 32px 20px 44px;
             gap: 18px;
           }
           .band-text { font-size: 16px; }
           .band-dots { left: 50%; transform: translateX(-50%); }
+          .band-arrow { display: none; }
         }
       `}</style>
     </section>

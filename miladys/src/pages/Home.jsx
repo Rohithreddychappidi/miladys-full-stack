@@ -232,7 +232,7 @@ export default function Home() {
         .sparkle-bg { position: absolute; pointer-events: none; z-index: 0; }
         .sparkle-bg img { width: 100%; height: auto; display: block; }
         .sparkle-bg-a { top: 20px; left: -70px; width: 260px; opacity: 0.12; }
-        .sparkle-bg-b { bottom: -20px; right: -60px; width: 300px; opacity: 0.1; transform: rotate(18deg); }
+        .sparkle-bg-b { bottom: -20px; right: -60px; width: 300px; opacity: 0.1; }
 
         .promo-banner { background: var(--maroon-900); padding: 40px 0; }
         .promo-inner {
@@ -264,10 +264,10 @@ export default function Home() {
         }
         .story { position: relative; overflow: hidden; }
         .sparkle-bg-story {
-          bottom: -60px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 460px;
+          top: 50%;
+          right: -80px;
+          transform: translateY(-50%);
+          width: 420px;
           opacity: 0.13;
         }
         .story-image {

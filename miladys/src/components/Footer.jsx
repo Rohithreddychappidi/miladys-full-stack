@@ -1,26 +1,74 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { api } from '../data/api';
+
+const defaultSocial = {
+  whatsapp: '',
+  facebook: '',
+  twitter: '',
+  instagram: 'https://www.instagram.com/themiladys_',
+};
+
+function whatsappUrl(number) {
+  const digits = (number || '').replace(/[^\d]/g, '');
+  return digits ? `https://wa.me/${digits}` : '';
+}
 
 export default function Footer() {
+  const [social, setSocial] = useState(defaultSocial);
+
+  useEffect(() => {
+    api
+      .getHomeSections()
+      .then(({ sections }) => {
+        const found = sections.find((s) => s.section_key === 'social_links');
+        if (found?.content) setSocial({ ...defaultSocial, ...found.content });
+      })
+      .catch(() => {});
+  }, []);
+
+  const wa = whatsappUrl(social.whatsapp);
+
   return (
     <footer className="site-footer">
       <div className="container footer-grid">
         <div className="footer-brand">
           <img src="/images/logo-white.png" alt="Milady's" className="footer-logo" />
           <p>Premium sarees, handpicked for the woman who wears tradition her own way.</p>
-          <a
-            className="ig-link"
-            href="https://www.instagram.com/themiladys_"
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Milady's on Instagram"
-          >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" strokeWidth="1.6" />
-              <circle cx="12" cy="12" r="4.2" stroke="currentColor" strokeWidth="1.6" />
-              <circle cx="17.3" cy="6.7" r="1.1" fill="currentColor" />
-            </svg>
-            Instagram
-          </a>
+
+          <div className="social-links">
+            {social.instagram && (
+              <a href={social.instagram} target="_blank" rel="noreferrer" aria-label="Milady's on Instagram" className="social-link">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" strokeWidth="1.6" />
+                  <circle cx="12" cy="12" r="4.2" stroke="currentColor" strokeWidth="1.6" />
+                  <circle cx="17.3" cy="6.7" r="1.1" fill="currentColor" />
+                </svg>
+              </a>
+            )}
+            {wa && (
+              <a href={wa} target="_blank" rel="noreferrer" aria-label="Chat with Milady's on WhatsApp" className="social-link">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.7-1.2A9 9 0 1 0 12 3z" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M8.5 8.7c.2-.5.4-.5.6-.5h.5c.2 0 .4 0 .6.4.2.5.7 1.6.7 1.7.1.1.1.3 0 .4-.1.2-.2.3-.3.4l-.4.5c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.6-.7c.2-.2.4-.2.6-.1l1.5.7c.2.1.4.2.4.4.1.5-.1 1.4-.6 1.8-.6.5-1.6.8-2.6.5-1.8-.5-3.7-1.6-5.1-3.1-1.3-1.3-2.1-2.7-2.4-3.4-.3-.7-.4-1.7.2-2.4z" fill="currentColor" />
+                </svg>
+              </a>
+            )}
+            {social.facebook && (
+              <a href={social.facebook} target="_blank" rel="noreferrer" aria-label="Milady's on Facebook" className="social-link">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M15.5 8.5h-2a1 1 0 0 0-1 1V12h3l-.4 3h-2.6v7h-3v-7H8v-3h2.5V9.2c0-2.3 1.4-3.7 3.6-3.7h1.9v3z" fill="currentColor" />
+                </svg>
+              </a>
+            )}
+            {social.twitter && (
+              <a href={social.twitter} target="_blank" rel="noreferrer" aria-label="Milady's on Twitter / X" className="social-link">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M4 4l7.2 9.4L4.4 20H6l6-6.4 4.5 6.4H20l-7.5-9.9L19 4h-1.6l-5.5 5.9L8 4H4z" fill="currentColor" />
+                </svg>
+              </a>
+            )}
+          </div>
         </div>
 
         <div className="footer-col">
@@ -74,17 +122,20 @@ export default function Footer() {
           max-width: 260px;
           margin: 14px 0 16px;
         }
-        .ig-link {
-          display: inline-flex;
+        .social-links { display: flex; gap: 10px; }
+        .social-link {
+          display: flex;
           align-items: center;
-          gap: 7px;
-          font-size: 13px;
+          justify-content: center;
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          border: 1px solid rgba(255,255,255,0.25);
           color: var(--ivory);
-          border-bottom: 1px solid var(--ivory);
-          padding-bottom: 2px;
-          width: fit-content;
+          transition: background 0.2s ease, border-color 0.2s ease;
         }
-        .ig-link svg { width: 16px; height: 16px; }
+        .social-link svg { width: 16px; height: 16px; }
+        .social-link:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.5); }
         .footer-col h4 {
           font-family: var(--font-body);
           color: var(--ivory);

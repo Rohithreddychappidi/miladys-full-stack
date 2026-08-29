@@ -70,6 +70,12 @@ const homeSections = [
   { key: 'testimonials', title: 'Customer Testimonials', sort: 7, content: {
     heading: 'Loved by our customers',
   } },
+  { key: 'social_links', title: 'Footer — Social & Contact Links', sort: 20, content: {
+    whatsapp: '',
+    facebook: '',
+    twitter: '',
+    instagram: 'https://www.instagram.com/themiladys_',
+  } },
   { key: 'about_hero', title: 'About Page — Header', sort: 8, content: {
     eyebrow: "About Milady's",
     heading: 'A saree house built on the weave, not the trend',

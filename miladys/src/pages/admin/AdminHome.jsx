@@ -9,6 +9,7 @@ const sectionLabels = {
   featured: 'Featured Sarees (heading)',
   story: 'Our Craft',
   testimonials: 'Testimonials Heading',
+  social_links: 'Footer — Social & Contact Links',
 };
 
 // Plain text/textarea fields per section. Sections with extra custom UI
@@ -48,6 +49,12 @@ const sectionFields = {
   ],
   testimonials: [
     { key: 'heading', label: 'Heading', type: 'text' },
+  ],
+  social_links: [
+    { key: 'whatsapp', label: 'WhatsApp number (with country code, digits only — e.g. 917842225444)', type: 'text' },
+    { key: 'facebook', label: 'Facebook page URL', type: 'text' },
+    { key: 'twitter', label: 'Twitter / X profile URL', type: 'text' },
+    { key: 'instagram', label: 'Instagram profile URL', type: 'text' },
   ],
 };
 

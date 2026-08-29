@@ -31,6 +31,17 @@
 
 html { scroll-behavior: smooth; }
 
+/* Lenis (the smooth-scroll library used on public pages) drives scrolling
+   itself via JS. Leaving the native CSS smooth-scroll active at the same
+   time meant every programmatic scroll reset — including "jump to top on
+   page change" — got double-animated by both systems fighting each other,
+   which is what caused new pages to visibly flash toward the old scroll
+   position (often the footer) before snapping up to the top. This is
+   Lenis's own documented fix: disable native smooth-scroll only while
+   Lenis has added its class to <html>, so anchor-link scrolling on pages
+   without Lenis (e.g. admin) is unaffected. */
+html.lenis.lenis-smooth { scroll-behavior: auto !important; }
+
 html, body {
   max-width: 100%;
   overflow-x: hidden;

@@ -337,6 +337,39 @@ export default function Navbar() {
         .popover-link:hover { background: var(--blush-400); }
         .popover-link.active { color: var(--maroon-900); font-weight: 600; background: var(--stone-200); }
 
+        /* Desktop: the menu widens to a full glass panel spanning the page
+           instead of a small dropdown box — readable against the blur via
+           a dark tint and light text, same glass language as the navbar
+           itself when scrolled. */
+        @media (min-width: 861px) {
+          .nav-popover {
+            left: -16px;
+            right: -16px;
+            min-width: 0;
+            background: rgba(58, 14, 21, 0.82);
+            backdrop-filter: blur(22px) saturate(170%);
+            -webkit-backdrop-filter: blur(22px) saturate(170%);
+            border: 1px solid rgba(255,255,255,0.16);
+            border-radius: 0 0 22px 22px;
+            box-shadow: 0 24px 50px rgba(20,4,7,0.3), inset 0 1px 0 rgba(255,255,255,0.12);
+            padding: 20px;
+            transform-origin: top center;
+          }
+          .popover-links {
+            flex-direction: row;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 6px;
+          }
+          .popover-link {
+            color: var(--blush-300);
+            font-size: 15px;
+            padding: 12px 22px;
+          }
+          .popover-link:hover { background: rgba(255,255,255,0.08); color: var(--ivory); }
+          .popover-link.active { background: rgba(255,255,255,0.12); color: var(--ivory); }
+        }
+
         @media (max-width: 860px) {
           .navbar { margin: 0 12px 0; }
           .navbar-inner { height: 62px; }
