@@ -30,6 +30,11 @@ app.use(cors({
     if (!origin) return callback(null, true);
     if (!allowedOrigins.length) return callback(null, true); // CLIENT_URL unset — allow all (dev convenience)
     if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Log the exact origin that got rejected — without this, "Not allowed
+    // by CORS" in the logs gives no way to tell whether it's a legitimate
+    // domain that's missing from CLIENT_URL or just background bot/scanner
+    // noise (which every public API gets constantly and can be ignored).
+    console.warn(`[cors] rejected origin: ${origin} — allowed: ${allowedOrigins.join(', ')}`);
     callback(new Error('Not allowed by CORS'));
   },
 }));
