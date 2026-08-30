@@ -343,28 +343,29 @@ export default function Navbar() {
            itself when scrolled. */
         @media (min-width: 861px) {
           .nav-popover {
-            left: -16px;
-            right: -16px;
+            left: 16px;
+            right: 16px;
             min-width: 0;
-            background: rgba(58, 14, 21, 0.82);
+            background: rgba(58, 14, 21, 0.72);
             backdrop-filter: blur(22px) saturate(170%);
             -webkit-backdrop-filter: blur(22px) saturate(170%);
             border: 1px solid rgba(255,255,255,0.16);
-            border-radius: 0 0 22px 22px;
+            border-radius: 26px;
             box-shadow: 0 24px 50px rgba(20,4,7,0.3), inset 0 1px 0 rgba(255,255,255,0.12);
-            padding: 20px;
+            padding: 32px;
             transform-origin: top center;
           }
           .popover-links {
             flex-direction: row;
             flex-wrap: wrap;
             justify-content: center;
-            gap: 6px;
+            gap: 10px;
           }
           .popover-link {
             color: var(--blush-300);
-            font-size: 15px;
-            padding: 12px 22px;
+            font-size: 17px;
+            padding: 18px 32px;
+            border-radius: 14px;
           }
           .popover-link:hover { background: rgba(255,255,255,0.08); color: var(--ivory); }
           .popover-link.active { background: rgba(255,255,255,0.12); color: var(--ivory); }

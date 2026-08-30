@@ -16,12 +16,24 @@ export default function CategoryShowcase({ categories, note, heading }) {
   const hoveringRef = useRef(false);
   const rafRef = useRef(null);
   const scrollRafRef = useRef(null);
+  const settleTimerRef = useRef(null);
+  const setWidthRef = useRef(0);
   const [renderPos, setRenderPos] = useState(0);
   const [focusIndex, setFocusIndex] = useState(0);
   const [isMobile, setIsMobile] = useState(
     typeof window !== 'undefined' ? window.innerWidth <= MOBILE_BREAKPOINT : false,
   );
   const count = categories.length;
+
+  // On mobile, the strip is a seamless loop: the real category list is
+  // repeated three times back to back (before / middle / after). We start
+  // scrolled into the middle copy, so the first category opens centered
+  // with the true last category peeking on the left and the true second
+  // category peeking on the right — exactly like a circular carousel —
+  // and swiping past either end silently jumps one full copy-width to the
+  // matching, pixel-identical position in the next copy, so it looks like
+  // it just keeps rotating instead of hitting a wall.
+  const loopedCategories = count ? [...categories, ...categories, ...categories] : [];
 
   // Track viewport so we can switch to a plain touch-scroll list on phones
   // instead of the animated carousel — no continuous drift to fight with.
@@ -56,15 +68,32 @@ export default function CategoryShowcase({ categories, note, heading }) {
   // nearest the horizontal center of the scroll strip gets the gentle
   // bounce, updated as the person swipes. Plain scroll-position math, not
   // IntersectionObserver — a native 'scroll' event always fires reliably.
+  // Also drives the infinite-loop illusion: once the scroll settles, if the
+  // centered card belongs to the "before" or "after" copy, silently jump
+  // exactly one copy-width so the person is always somewhere in the
+  // (visually identical) middle territory, with room to keep swiping either
+  // direction.
   useEffect(() => {
-    if (!isMobile) return undefined;
+    if (!isMobile || !count) return undefined;
     const el = scrollRef.current;
     if (!el) return undefined;
 
-    function updateFocus() {
+    function measureSetWidth() {
+      const a = cardRefs.current[0];
+      const b = cardRefs.current[count];
+      if (a && b) setWidthRef.current = b.offsetLeft - a.offsetLeft;
+    }
+
+    function centerOn(index) {
+      const card = cardRefs.current[index];
+      if (!card) return;
+      el.scrollLeft = card.offsetLeft - (el.clientWidth - card.clientWidth) / 2;
+    }
+
+    function closestIndex() {
       const containerRect = el.getBoundingClientRect();
       const containerCenter = containerRect.left + containerRect.width / 2;
-      let closest = 0;
+      let closest = count; // default to first item of the middle copy
       let closestDist = Infinity;
       cardRefs.current.forEach((card, i) => {
         if (!card) return;
@@ -76,23 +105,45 @@ export default function CategoryShowcase({ categories, note, heading }) {
           closest = i;
         }
       });
-      setFocusIndex(closest);
+      return closest;
+    }
+
+    function settle() {
+      const closest = closestIndex();
+      if (closest < count) {
+        // Drifted into the "before" copy — teleport forward one copy-width.
+        el.scrollLeft += setWidthRef.current;
+        setFocusIndex(closest + count);
+      } else if (closest >= count * 2) {
+        // Drifted into the "after" copy — teleport back one copy-width.
+        el.scrollLeft -= setWidthRef.current;
+        setFocusIndex(closest - count);
+      } else {
+        setFocusIndex(closest);
+      }
     }
 
     function onScroll() {
       if (scrollRafRef.current) return;
       scrollRafRef.current = requestAnimationFrame(() => {
         scrollRafRef.current = null;
-        updateFocus();
+        setFocusIndex(closestIndex());
       });
+      clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = setTimeout(settle, 120);
     }
 
-    // Run once after the entrance animation/layout settles, then on every
-    // scroll of the strip.
-    const initial = setTimeout(updateFocus, 350);
+    // Measure and center on the first real category once layout has
+    // settled, then keep listening for swipes.
+    const initial = setTimeout(() => {
+      measureSetWidth();
+      centerOn(count);
+      setFocusIndex(count);
+    }, 350);
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       clearTimeout(initial);
+      clearTimeout(settleTimerRef.current);
       el.removeEventListener('scroll', onScroll);
       if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
     };
@@ -140,16 +191,16 @@ export default function CategoryShowcase({ categories, note, heading }) {
 
       {isMobile ? (
         <div className="showcase-scroll" ref={scrollRef}>
-          {categories.map((c, i) => {
+          {loopedCategories.map((c, i) => {
             const dist = Math.min(Math.abs(i - focusIndex), 3);
             return (
               <Link
-                key={c.id}
+                key={`${c.id}-${Math.floor(i / count)}`}
                 ref={(el) => { cardRefs.current[i] = el; }}
                 to={`/products?category=${c.id}`}
                 className={`showcase-scroll-card ${i === focusIndex ? 'is-focus' : ''}`}
                 data-dist={dist}
-                style={{ animationDelay: `${Math.min(i, 6) * 70}ms` }}
+                style={{ animationDelay: `${Math.min(i % count, 6) * 70}ms` }}
               >
                 <div className="showcase-card-lift">
                   <img src={c.image} alt="" />
