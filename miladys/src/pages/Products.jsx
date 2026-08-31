@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
 import RecommendedProducts from '../components/RecommendedProducts';
+import Seo from '../components/Seo';
 import { api } from '../data/api';
 import { getCategories, getProducts } from '../data/store';
 
@@ -58,8 +59,22 @@ export default function Products() {
     setFiltersOpen(false);
   }
 
+  const activeCategoryName = activeCategory !== 'all'
+    ? categories.find((c) => c.id === activeCategory)?.name
+    : null;
+  const seoTitle = activeCategoryName ? `${activeCategoryName} Sarees` : 'Shop All Sarees';
+
   return (
     <div className="products-page">
+      <Seo
+        title={seoTitle}
+        path={activeCategory !== 'all' ? `/products?category=${activeCategory}` : '/products'}
+        description={
+          activeCategoryName
+            ? `Shop handwoven ${activeCategoryName} sarees at Milady's — sourced directly from India's weaving clusters.`
+            : "Browse Milady's full collection of handwoven silk and everyday sarees — Kanjivaram, Banarasi, bridal, organza and more."
+        }
+      />
       <div className="sparkle-bg" aria-hidden="true">
         <img src="/images/sparkle-bg.svg" alt="" />
       </div>

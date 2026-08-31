@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import RecommendedProducts from '../components/RecommendedProducts';
+import Seo from '../components/Seo';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../data/api';
 
 const emptyAddress = { name: '', mobile: '', line1: '', city: '', state: '', pincode: '' };
+const emptyPasswordForm = { currentPassword: '', newPassword: '', confirmPassword: '' };
 
 export default function Profile() {
   const { user, logout } = useAuth();
@@ -13,6 +15,10 @@ export default function Profile() {
   const [addresses, setAddresses] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyAddress);
+  const [passwordForm, setPasswordForm] = useState(emptyPasswordForm);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSaved, setPasswordSaved] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     if (user) setProfile({ name: user.name, mobile: user.mobile || '' });
@@ -40,8 +46,36 @@ export default function Profile() {
     setAddresses((prev) => prev.filter((a) => a.id !== id));
   }
 
+  async function handlePasswordSubmit(e) {
+    e.preventDefault();
+    setPasswordError('');
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError('New passwords do not match.');
+      return;
+    }
+    if (passwordForm.newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters.');
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await api.changePassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
+      setPasswordForm(emptyPasswordForm);
+      setPasswordSaved(true);
+      setTimeout(() => setPasswordSaved(false), 2500);
+    } catch (err) {
+      setPasswordError(err.message);
+    } finally {
+      setChangingPassword(false);
+    }
+  }
+
   return (
     <div className="profile-page">
+      <Seo title="My Profile" path="/profile" noindex />
       <div className="container">
         <div className="page-head">
           <p className="eyebrow">Your Account</p>
@@ -49,37 +83,77 @@ export default function Profile() {
         </div>
 
         <div className="profile-grid">
-          <form className="profile-card" onSubmit={handleProfileSubmit}>
-            <h3>Personal Details</h3>
-            <label>
-              Name
-              <input
-                type="text"
-                value={profile.name}
-                onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
-                placeholder="Your full name"
-              />
-            </label>
-            <label>
-              Mobile
-              <input
-                type="tel"
-                value={profile.mobile}
-                onChange={(e) => setProfile((p) => ({ ...p, mobile: e.target.value }))}
-                placeholder="10-digit mobile number"
-              />
-            </label>
-            <label>
-              Email
-              <input type="email" value={user?.email || ''} disabled />
-            </label>
-            <button type="submit" className="btn btn-primary">Save Details</button>
-            {savedMsg && <span className="saved-msg">Saved ✓</span>}
-            <div className="profile-links">
-              <Link to="/orders">View your orders →</Link>
-              <button type="button" className="logout-btn" onClick={logout}>Log out</button>
-            </div>
-          </form>
+          <div className="profile-col">
+            <form className="profile-card" onSubmit={handleProfileSubmit}>
+              <h3>Personal Details</h3>
+              <label>
+                Name
+                <input
+                  type="text"
+                  value={profile.name}
+                  onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="Your full name"
+                />
+              </label>
+              <label>
+                Mobile
+                <input
+                  type="tel"
+                  value={profile.mobile}
+                  onChange={(e) => setProfile((p) => ({ ...p, mobile: e.target.value }))}
+                  placeholder="10-digit mobile number"
+                />
+              </label>
+              <label>
+                Email
+                <input type="email" value={user?.email || ''} disabled />
+              </label>
+              <button type="submit" className="btn btn-primary">Save Details</button>
+              {savedMsg && <span className="saved-msg">Saved ✓</span>}
+              <div className="profile-links">
+                <Link to="/orders">View your orders →</Link>
+                <button type="button" className="logout-btn" onClick={logout}>Log out</button>
+              </div>
+            </form>
+
+            <form className="profile-card" onSubmit={handlePasswordSubmit}>
+              <h3>Change Password</h3>
+              <label>
+                Current password
+                <input
+                  type="password"
+                  value={passwordForm.currentPassword}
+                  onChange={(e) => setPasswordForm((p) => ({ ...p, currentPassword: e.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                New password
+                <input
+                  type="password"
+                  value={passwordForm.newPassword}
+                  onChange={(e) => setPasswordForm((p) => ({ ...p, newPassword: e.target.value }))}
+                  minLength={6}
+                  required
+                />
+              </label>
+              <label>
+                Confirm new password
+                <input
+                  type="password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(e) => setPasswordForm((p) => ({ ...p, confirmPassword: e.target.value }))}
+                  minLength={6}
+                  required
+                />
+              </label>
+              {passwordError && <p className="password-error">{passwordError}</p>}
+              <button type="submit" className="btn btn-outline" disabled={changingPassword}>
+                {changingPassword ? 'Updating…' : 'Update Password'}
+              </button>
+              {passwordSaved && <span className="saved-msg">Password updated ✓</span>}
+            </form>
+          </div>
 
           <div className="address-card-panel">
             <div className="panel-head">
@@ -148,6 +222,7 @@ export default function Profile() {
         .page-head { margin-bottom: 30px; }
         .page-head h1 { font-size: 34px; margin-top: 8px; }
         .profile-grid { display: grid; grid-template-columns: 360px 1fr; gap: 28px; align-items: flex-start; margin-bottom: 60px; }
+        .profile-col { display: flex; flex-direction: column; gap: 20px; }
 
         .profile-card, .address-card-panel {
           background: var(--paper);
@@ -167,6 +242,7 @@ export default function Profile() {
         }
         .profile-card input:disabled { background: var(--stone-100); color: var(--ink-400); }
         .saved-msg { font-size: 12.5px; color: #3c7a3c; }
+        .password-error { font-size: 12.5px; color: #a13a3a; margin: 0; }
         .profile-links { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 12.5px; }
         .profile-links a { color: var(--gold-600); border-bottom: 1px solid var(--gold-500); }
         .logout-btn { background: none; border: none; color: #a13a3a; font-size: 12.5px; }

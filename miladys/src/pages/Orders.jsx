@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import RecommendedProducts from '../components/RecommendedProducts';
+import Seo from '../components/Seo';
 import { api } from '../data/api';
 import { formatINR } from '../data/store';
 
@@ -71,6 +72,7 @@ export default function Orders() {
 
   return (
     <div className="orders-page">
+      <Seo title="My Orders" path="/orders" noindex />
       <div className="container">
         <div className="page-head">
           <p className="eyebrow">Your Account</p>

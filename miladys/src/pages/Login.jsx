@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import Seo from '../components/Seo';
 
 export default function Login() {
   const [mode, setMode] = useState('login');
@@ -32,6 +33,7 @@ export default function Login() {
 
   return (
     <div className="auth-page">
+      <Seo title="Log In" path="/login" noindex />
       <div className="container auth-wrap">
         <div className="auth-card">
           <p className="eyebrow">Welcome</p>

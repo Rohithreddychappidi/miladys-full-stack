@@ -13,6 +13,7 @@ import orderRoutes from './routes/orders.js';
 import couponRoutes from './routes/coupons.js';
 import testimonialRoutes from './routes/testimonials.js';
 import cancellationPolicyRoutes from './routes/cancellationPolicy.js';
+import sitemapRoutes from './routes/sitemap.js';
 
 const app = express();
 
@@ -45,6 +46,10 @@ app.use(express.json({ limit: '30mb' }));
 app.use(attachUser);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
+// Not under /api — sitemaps live at the domain root by convention, and the
+// frontend (Vercel) proxies /sitemap.xml to this exact path (see vercel.json).
+app.use(sitemapRoutes);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/categories', categoryRoutes);

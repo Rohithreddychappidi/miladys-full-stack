@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import RecommendedProducts from '../components/RecommendedProducts';
+import Seo from '../components/Seo';
 import { useCart } from '../context/CartContext';
 import { formatINR } from '../data/store';
 
@@ -8,6 +9,7 @@ export default function Cart() {
 
   return (
     <div className="cart-page">
+      <Seo title="Your Cart" path="/cart" noindex />
       <div className="container">
         <div className="page-head">
           <p className="eyebrow">Your Bag</p>

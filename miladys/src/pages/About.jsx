@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import RecommendedProducts from '../components/RecommendedProducts';
 import ScrollReveal from '../components/ScrollReveal';
+import Seo from '../components/Seo';
 import { api } from '../data/api';
 
 const defaults = {
@@ -38,6 +39,11 @@ export default function About() {
 
   return (
     <div className="about-page">
+      <Seo
+        title="About Us"
+        path="/about"
+        description="Milady's works directly with weaving families across South India to bring genuine, hand-checked handloom sarees to your wardrobe."
+      />
       <section className="about-hero">
         <div className="container">
           <p className="eyebrow" style={{ color: 'var(--blush-300)' }}>{hero.eyebrow}</p>

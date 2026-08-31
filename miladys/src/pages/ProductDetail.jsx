@@ -4,6 +4,7 @@ import RecommendedProducts from '../components/RecommendedProducts';
 import ReviewsCarousel from '../components/ReviewsCarousel';
 import Testimonials from '../components/Testimonials';
 import CancellationPolicyCard from '../components/CancellationPolicyCard';
+import Seo, { SITE_URL } from '../components/Seo';
 import { useCart } from '../context/CartContext';
 import { api } from '../data/api';
 import { formatINR, getProducts } from '../data/store';
@@ -59,6 +60,11 @@ export default function ProductDetail() {
   // re-upload the same photo as both without it showing twice.
   const gallery = [product.image, ...(product.images || [])].filter((src, i, arr) => src && arr.indexOf(src) === i);
   const mainImage = activeImage || gallery[0];
+  // Social/search crawlers need a fetchable http(s) image URL — a few
+  // gallery photos uploaded through the admin panel are stored as base64
+  // data URLs, which those crawlers can't use, so fall back to the site
+  // default image in that case rather than pointing at an unusable URL.
+  const ogImage = mainImage?.startsWith('http') ? mainImage : undefined;
 
   function handleAdd() {
     addItem(product, qty);
@@ -67,6 +73,30 @@ export default function ProductDetail() {
 
   return (
     <div className="detail-page">
+      <Seo
+        title={product.name}
+        path={`/products/${product.id}`}
+        description={(product.description || `${product.name} — handwoven saree from Milady's.`).slice(0, 160)}
+        image={ogImage}
+        type="product"
+        jsonLd={{
+          '@context': 'https://schema.org',
+          '@type': 'Product',
+          name: product.name,
+          description: product.description || undefined,
+          image: gallery.filter((src) => src?.startsWith('http')),
+          sku: product.id,
+          offers: {
+            '@type': 'Offer',
+            url: `${SITE_URL}/products/${product.id}`,
+            priceCurrency: 'INR',
+            price: product.price,
+            availability: outOfStock
+              ? 'https://schema.org/OutOfStock'
+              : 'https://schema.org/InStock',
+          },
+        }}
+      />
       <div className="container detail-grid">
         <div className="detail-gallery">
           <div className="detail-image">

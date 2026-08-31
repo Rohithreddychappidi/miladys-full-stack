@@ -5,6 +5,7 @@ import HeroSlider from '../components/HeroSlider';
 import ProductCard from '../components/ProductCard';
 import RecommendedProducts from '../components/RecommendedProducts';
 import ScrollReveal from '../components/ScrollReveal';
+import Seo, { SITE_NAME, SITE_URL } from '../components/Seo';
 import TestimonialBand from '../components/TestimonialBand';
 import TextReveal from '../components/TextReveal';
 import { api } from '../data/api';
@@ -69,6 +70,18 @@ export default function Home() {
 
   return (
     <div className="home">
+      <Seo
+        path="/"
+        description="Milady's — handwoven silk and everyday sarees sourced directly from India's weaving clusters. Shop Kanjivaram, Banarasi, bridal and organza sarees online."
+        jsonLd={{
+          '@context': 'https://schema.org',
+          '@type': 'Organization',
+          name: SITE_NAME,
+          url: SITE_URL,
+          logo: `${SITE_URL}/images/logo-white.png`,
+          sameAs: [],
+        }}
+      />
       <section className="hero">
         <div className="hero-visual" id="page-hero">
           <HeroSlider slides={hero.slides} mobileSlides={hero.mobileSlides} />

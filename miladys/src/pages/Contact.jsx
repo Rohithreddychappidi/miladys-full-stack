@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import RecommendedProducts from '../components/RecommendedProducts';
+import Seo from '../components/Seo';
 
 export default function Contact() {
   const [sent, setSent] = useState(false);
@@ -11,6 +12,11 @@ export default function Contact() {
 
   return (
     <div className="contact-page">
+      <Seo
+        title="Contact Us"
+        path="/contact"
+        description="Get in touch with Milady's for order queries, custom requests, or anything about our handloom sarees."
+      />
       <div className="container contact-grid">
         <div className="contact-info">
           <p className="eyebrow">Get in touch</p>

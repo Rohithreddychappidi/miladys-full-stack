@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import RecommendedProducts from '../components/RecommendedProducts';
+import Seo from '../components/Seo';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { api } from '../data/api';
@@ -173,6 +174,7 @@ export default function Checkout() {
 
   return (
     <div className="checkout-page">
+      <Seo title="Checkout" path="/checkout" noindex />
       <div className="container">
         <div className="page-head">
           <p className="eyebrow">Almost there</p>
