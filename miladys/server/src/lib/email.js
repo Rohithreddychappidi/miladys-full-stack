@@ -2,7 +2,13 @@ import { Resend } from 'resend';
 
 const apiKey = process.env.RESEND_API_KEY;
 const fromEmail = process.env.RESEND_FROM_EMAIL || "Milady's <onboarding@resend.dev>";
-const siteUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+// CLIENT_URL can be a comma-separated list (needed for CORS, so both the
+// bare domain and the www./".in" variants are all allowed origins) — but a
+// link inside an email needs exactly ONE url, so only the first entry is
+// used here. Without this, an email link ended up literally embedding
+// every comma-separated domain into one broken URL, sending customers to
+// an invalid link when they clicked "View Orders".
+const siteUrl = (process.env.CLIENT_URL || 'http://localhost:5173').split(',')[0].trim();
 
 export const emailEnabled = Boolean(apiKey && !apiKey.includes('xxxx'));
 
