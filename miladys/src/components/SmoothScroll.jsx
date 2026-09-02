@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import Lenis from 'lenis';
 
 // Adds a gentle, eased "glide" to scrolling on desktop (mouse wheel /
@@ -8,6 +9,9 @@ import Lenis from 'lenis';
 // doesn't affect the mobile touch-scroll work done elsewhere on the site.
 // People who've asked their OS for reduced motion get plain native scroll.
 export default function SmoothScroll() {
+  const lenisRef = useRef(null);
+  const { pathname } = useLocation();
+
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia(
       '(prefers-reduced-motion: reduce)',
@@ -22,6 +26,7 @@ export default function SmoothScroll() {
       syncTouch: false, // native touch scroll on mobile — no interference there
       touchMultiplier: 1,
     });
+    lenisRef.current = lenis;
 
     let rafId;
     function raf(time) {
@@ -33,8 +38,30 @@ export default function SmoothScroll() {
     return () => {
       cancelAnimationFrame(rafId);
       lenis.destroy();
+      lenisRef.current = null;
     };
   }, []);
+
+  // Reset scroll to the top on every route change. This runs in
+  // useLayoutEffect, not useEffect — a plain useEffect fires AFTER the
+  // browser has already painted the new page at the old scroll position,
+  // so for one visible frame the new (often shorter) page renders scrolled
+  // down near the footer before snapping to the top a moment later.
+  // useLayoutEffect runs synchronously before that paint, so the reset
+  // happens before anything is shown, eliminating the flash entirely.
+  // Lenis tracks scroll position independently of the browser's native
+  // scrollY, so a plain window.scrollTo(0, 0) here would also get silently
+  // overridden on the next animation frame by Lenis re-asserting its own
+  // (still-scrolled-down) position — going through lenis.scrollTo() keeps
+  // both in sync. When Lenis isn't running (reduced-motion), plain
+  // scrollTo still works fine on its own.
+  useLayoutEffect(() => {
+    if (lenisRef.current) {
+      lenisRef.current.scrollTo(0, { immediate: true });
+    } else {
+      window.scrollTo(0, 0);
+    }
+  }, [pathname]);
 
   return null;
 }

@@ -45,6 +45,11 @@ html.lenis.lenis-smooth { scroll-behavior: auto !important; }
 html, body {
   max-width: 100%;
   overflow-x: hidden;
+  /* Prevents the browser from "helpfully" re-adjusting scroll position when
+     content above the viewport shifts (e.g. images finishing loading after
+     the page has already rendered) — that auto-correction can otherwise
+     fight with the deliberate scroll-to-top reset on page navigation. */
+  overflow-anchor: none;
 }
 
 body {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import Seo from '../../components/Seo';
 
 const links = [
   { to: '/admin', label: 'Dashboard', end: true },
@@ -37,6 +38,7 @@ function AdminLoginGate() {
 
   return (
     <div className="admin-gate">
+      <Seo title="Admin Login" path="/admin" noindex />
       <form className="admin-gate-card" onSubmit={handleSubmit}>
         <div className="admin-brand">
           <span className="brand-mark">✦</span> Milady&apos;s <span className="cms-tag">CMS</span>
@@ -74,6 +76,7 @@ export default function AdminLayout() {
 
   return (
     <div className="admin-shell">
+      <Seo title="Admin" path="/admin" noindex />
       <aside className="admin-sidebar">
         <div className="admin-brand">
           <span className="brand-mark">✦</span> Milady&apos;s <span className="cms-tag">CMS</span>

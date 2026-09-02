@@ -18,6 +18,7 @@ import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
 import Profile from './pages/Profile';
 import Login from './pages/Login';
+import NotFound from './pages/NotFound';
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminHome from './pages/admin/AdminHome';
@@ -34,7 +35,6 @@ function PublicSite() {
   return (
     <>
       <SmoothScroll />
-      <ScrollToTop />
       <LogoIntro />
       <Navbar />
       <main>
@@ -49,6 +49,7 @@ function PublicSite() {
           <Route path="/checkout" element={<RequireAuth><Checkout /></RequireAuth>} />
           <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
           <Route path="/login" element={<Login />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
       <Footer />
@@ -77,6 +78,7 @@ export default function App() {
             <Route path="cancellation-policy" element={<AdminCancellationPolicy />} />
             <Route path="reviews" element={<AdminReviews />} />
             <Route path="testimonials" element={<AdminTestimonials />} />
+            <Route path="*" element={<AdminDashboard />} />
           </Route>
         </Routes>
       </AuthProvider>

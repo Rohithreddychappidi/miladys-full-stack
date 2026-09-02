@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 
 const links = [
   { to: '/', label: 'Home' },
@@ -13,13 +14,21 @@ const links = [
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [overHero, setOverHero] = useState(false);
   const [hasHero, setHasHero] = useState(false);
   const [query, setQuery] = useState('');
   const { count } = useCart();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Close the account dropdown on any route change (e.g. after clicking
+  // one of its own links) so it doesn't stay open over the new page.
+  useEffect(() => {
+    setAccountOpen(false);
+  }, [location.pathname]);
 
   // On pages with a full-bleed hero (marked with id="page-hero"), the navbar
   // stays fully transparent for as long as any part of the hero is still
@@ -90,12 +99,51 @@ export default function Navbar() {
               <line x1="16.2" y1="16.2" x2="21" y2="21" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
             </svg>
           </button>
-          <Link to="/profile" className="icon-btn" aria-label="Login">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle cx="12" cy="8" r="3.4" stroke="currentColor" strokeWidth="1.6" />
-              <path d="M4.5 20c1.4-4 4.2-6 7.5-6s6.1 2 7.5 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-            </svg>
-          </Link>
+          <div className="account-menu-wrap">
+            <button
+              className="icon-btn"
+              aria-label="Account"
+              aria-expanded={accountOpen}
+              onClick={() => { setAccountOpen((v) => !v); setSearchOpen(false); setMenuOpen(false); }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="12" cy="8" r="3.4" stroke="currentColor" strokeWidth="1.6" />
+                <path d="M4.5 20c1.4-4 4.2-6 7.5-6s6.1 2 7.5 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              </svg>
+            </button>
+
+            {accountOpen && (
+              <>
+                <div className="account-menu-overlay" onClick={() => setAccountOpen(false)} aria-hidden="true" />
+                <div className="account-menu">
+                  {user ? (
+                    <>
+                      <p className="account-menu-greeting">Hi, {user.name?.split(' ')[0] || 'there'}</p>
+                      <Link to="/orders" className="account-menu-link" onClick={() => setAccountOpen(false)}>
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+                        My Orders
+                      </Link>
+                      <Link to="/profile" className="account-menu-link" onClick={() => setAccountOpen(false)}>
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="3.4" stroke="currentColor" strokeWidth="1.6" /><path d="M4.5 20c1.4-4 4.2-6 7.5-6s6.1 2 7.5 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+                        My Profile
+                      </Link>
+                      <button type="button" className="account-menu-link account-menu-logout" onClick={() => { logout(); setAccountOpen(false); }}>
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 17l5-5-5-5M20 12H9M12 19H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                        Log Out
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <Link to="/login" className="account-menu-link" onClick={() => setAccountOpen(false)}>
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 17l5-5-5-5M20 12H9M12 19H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" transform="rotate(180 12 12)" /></svg>
+                        Log In / Sign Up
+                      </Link>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
           <Link to="/cart" className="icon-btn cart-link" aria-label="Cart">
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M4 6h2l1.6 10.2a2 2 0 0 0 2 1.7h7.4a2 2 0 0 0 2-1.6L20 8H6.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -245,6 +293,49 @@ export default function Navbar() {
         }
         .icon-btn svg { width: 21px; height: 21px; }
         .icon-btn:hover { color: var(--ivory); }
+
+        .account-menu-wrap { position: relative; }
+        .account-menu-overlay { position: fixed; inset: 0; z-index: 199; }
+        .account-menu {
+          position: absolute;
+          top: calc(100% + 10px);
+          right: 0;
+          z-index: 200;
+          min-width: 200px;
+          background: var(--ivory);
+          border-radius: 16px;
+          box-shadow: 0 18px 40px rgba(36,26,23,0.22);
+          padding: 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .account-menu-greeting {
+          padding: 8px 12px 6px;
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--ink-400);
+          margin: 0;
+        }
+        .account-menu-link {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 11px 12px;
+          border-radius: 10px;
+          font-family: var(--font-body);
+          font-size: 14.5px;
+          color: var(--ink-900);
+          background: none;
+          border: none;
+          text-align: left;
+          width: 100%;
+          cursor: pointer;
+        }
+        .account-menu-link svg { width: 17px; height: 17px; flex: 0 0 auto; color: var(--ink-400); }
+        .account-menu-link:hover { background: var(--blush-400); }
+        .account-menu-logout { color: #a13a3a; }
+        .account-menu-logout svg { color: #a13a3a; }
         .cart-badge {
           position: absolute;
           top: 3px;
@@ -336,6 +427,22 @@ export default function Navbar() {
         }
         .popover-link:hover { background: var(--blush-400); }
         .popover-link.active { color: var(--maroon-900); font-weight: 600; background: var(--stone-200); }
+
+        /* Desktop only — same compact ivory box as mobile, just sized up:
+           more padding, bigger text, more room per link. Mobile keeps the
+           original smaller dimensions untouched. */
+        @media (min-width: 861px) {
+          .nav-popover {
+            min-width: 280px;
+            border-radius: 20px;
+            padding: 16px;
+          }
+          .popover-link {
+            padding: 15px 20px;
+            font-size: 16px;
+            border-radius: 12px;
+          }
+        }
 
         @media (max-width: 860px) {
           .navbar { margin: 0 12px 0; }
