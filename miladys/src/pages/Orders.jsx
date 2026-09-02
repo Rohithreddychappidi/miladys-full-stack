@@ -101,7 +101,7 @@ export default function Orders() {
                     <span className={`status ${statusTone[o.status] || ''}`}>{statusLabel[o.status] || o.status}</span>
                   </div>
                   <div className="order-items">
-                    {o.items.map((item) => (
+                    {(o.items || []).map((item) => (
                       <div className="order-item" key={item.id}>
                         {item.product_image && <img src={item.product_image} alt={item.product_name} />}
                         <div>

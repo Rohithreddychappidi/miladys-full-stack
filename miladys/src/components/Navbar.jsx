@@ -399,9 +399,9 @@ export default function Navbar() {
           z-index: 200;
           min-width: 210px;
           background: var(--ivory);
-          border-radius: 16px;
+          border-radius: 18px;
           box-shadow: 0 18px 40px rgba(36,26,23,0.22);
-          padding: 10px;
+          padding: 14px;
           transform-origin: top left;
           transform: scale(0.92) translateY(-6px);
           opacity: 0;
@@ -418,10 +418,10 @@ export default function Navbar() {
           flex-direction: column;
         }
         .popover-link {
-          padding: 11px 14px;
-          border-radius: 10px;
+          padding: 15px 16px;
+          border-radius: 12px;
           font-family: var(--font-body);
-          font-size: 14.5px;
+          font-size: 15px;
           color: var(--ink-900);
           transition: background 0.15s ease, color 0.15s ease;
         }
