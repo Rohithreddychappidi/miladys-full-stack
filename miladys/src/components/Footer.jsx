@@ -84,6 +84,7 @@ export default function Footer() {
           <a href="tel:+917842225444">+91 78422 25444</a>
           <a href="mailto:themiladysofficial@gmail.com">themiladysofficial@gmail.com</a>
           <p className="addr">Flat No. 402, JM&apos;s CNR Tower,<br />Srinagar, Kakinada, A.P. 533003</p>
+          <a href="https://maps.app.goo.gl/5VFnXKQRaPAT8UxC7" target="_blank" rel="noreferrer">Get Directions →</a>
         </div>
 
         <div className="footer-col">

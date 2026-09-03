@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { query, pool } from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { razorpay, razorpayEnabled, verifyPaymentSignature } from '../lib/razorpay.js';
-import { sendOrderConfirmationEmail } from '../lib/email.js';
+import { sendOrderConfirmationEmail, sendCancellationEmail } from '../lib/email.js';
 import { findUsableCoupon, computeDiscount } from './coupons.js';
 import { findApplicableTier } from './cancellationPolicy.js';
 
@@ -232,6 +232,15 @@ router.post('/:id/cancel', requireAuth, async (req, res) => {
     } catch (err) {
       console.error('[orders/cancel] Razorpay refund failed — needs manual refund', order.id, err.message);
     }
+  }
+
+  // Fire the cancellation confirmation from our own side — separate from
+  // whatever Razorpay itself may send for the refund, since that's a
+  // payment-gateway notification, not an order-status one, and customers
+  // expect a clear "your order was cancelled" email from the store itself.
+  const { rows: userRows } = await query('SELECT * FROM users WHERE id = $1', [req.user.id]);
+  if (userRows[0]) {
+    sendCancellationEmail(userRows[0], order, { refundPercent: tier.refund_percent, refundAmount, tierLabel: tier.label }).catch(() => {});
   }
 
   res.json({ ok: true, refundPercent: tier.refund_percent, refundAmount, tierLabel: tier.label });

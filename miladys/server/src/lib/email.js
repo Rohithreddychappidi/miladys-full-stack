@@ -224,6 +224,44 @@ export function sendOrderConfirmationEmail(user, order, items) {
   });
 }
 
+export function sendCancellationEmail(user, order, { refundPercent, refundAmount, tierLabel }) {
+  const payable = order.subtotal - (order.discount || 0);
+  const content = `
+    <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:400;color:${COLORS.maroon900};margin:0 0 6px;">
+      Order cancelled
+    </h1>
+    <p style="font-size:14px;line-height:1.7;color:${COLORS.ink600};margin:0 0 22px;">
+      Hi ${escapeHtml(user.name)}, your order <strong style="color:${COLORS.ink900};">#MLD${order.id}</strong> has been cancelled as requested.
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${COLORS.stone100};border-radius:10px;margin-bottom:20px;">
+      <tr>
+        <td style="padding:16px 18px;">
+          <p style="margin:0 0 4px;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:${COLORS.ink400};font-weight:600;">Refund</p>
+          <p style="margin:0;font-size:15px;line-height:1.6;color:${COLORS.maroon900};font-weight:700;">
+            ₹${refundAmount.toLocaleString('en-IN')} <span style="font-weight:400;color:${COLORS.ink600};font-size:13px;">(${refundPercent}% of ₹${payable.toLocaleString('en-IN')} — ${escapeHtml(tierLabel)})</span>
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <p style="font-size:12px;color:${COLORS.ink400};margin:0;">
+      This refund is being processed to your original payment method via Razorpay and typically reflects within 5&ndash;7 business days. If you don&rsquo;t see it by then, feel free to reach out and we&rsquo;ll look into it.
+    </p>
+  `;
+
+  return send({
+    to: user.email,
+    subject: `Order cancelled — #MLD${order.id} · Milady's`,
+    html: layout({
+      preheader: `Your order #MLD${order.id} has been cancelled — ${refundPercent}% refund (₹${refundAmount.toLocaleString('en-IN')}) is on its way.`,
+      content,
+      ctaLabel: 'View your orders',
+      ctaUrl: `${siteUrl}/orders`,
+    }),
+  });
+}
+
 function escapeHtml(str = '') {
   return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }

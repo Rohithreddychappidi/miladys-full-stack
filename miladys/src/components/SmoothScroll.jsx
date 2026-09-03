@@ -56,6 +56,15 @@ export default function SmoothScroll() {
   // both in sync. When Lenis isn't running (reduced-motion), plain
   // scrollTo still works fine on its own.
   useLayoutEffect(() => {
+    // Belt-and-suspenders native reset first — on real iOS Safari, a swipe
+    // that's still decelerating (momentum scrolling) at the moment of tap
+    // can keep nudging scroll position for a beat even into a new page,
+    // in a way Lenis's own scrollTo doesn't always fully override. Setting
+    // both scroll containers directly, then letting Lenis sync to match,
+    // covers that case without affecting the already-verified desktop and
+    // Android behavior.
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
     if (lenisRef.current) {
       lenisRef.current.scrollTo(0, { immediate: true });
     } else {
