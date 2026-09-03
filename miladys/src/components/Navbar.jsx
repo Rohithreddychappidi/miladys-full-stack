@@ -205,7 +205,7 @@ export default function Navbar() {
           top: 0;
           left: 0;
           right: 0;
-          z-index: 100;
+          z-index: 160;
           margin: 0 16px 0;
           background: rgba(72, 24, 30, 0.5);
           backdrop-filter: blur(20px) saturate(170%);
