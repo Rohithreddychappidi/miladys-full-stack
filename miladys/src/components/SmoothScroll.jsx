@@ -12,6 +12,20 @@ export default function SmoothScroll() {
   const lenisRef = useRef(null);
   const { pathname } = useLocation();
 
+  // The browser has its OWN automatic scroll-restoration behavior for
+  // history navigations, independent of React entirely — by default it can
+  // try to "remember" and re-apply a scroll position on certain navigation
+  // patterns, which fights with the deliberate reset-to-top below in a way
+  // that's timing-dependent and hard to catch in scripted tests (it depends
+  // on real browser navigation history, not just a fresh page load). Setting
+  // this to 'manual' hands scroll position fully and exclusively to this
+  // component, removing that entire class of interference.
+  useEffect(() => {
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+  }, []);
+
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia(
       '(prefers-reduced-motion: reduce)',

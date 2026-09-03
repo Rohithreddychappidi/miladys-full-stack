@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
@@ -114,7 +115,10 @@ export default function Navbar() {
 
             {accountOpen && (
               <>
-                <div className="account-menu-overlay" onClick={() => setAccountOpen(false)} aria-hidden="true" />
+                {createPortal(
+                  <div className="account-menu-overlay" onClick={() => setAccountOpen(false)} aria-hidden="true" />,
+                  document.body,
+                )}
                 <div className="account-menu">
                   {user ? (
                     <>
@@ -174,8 +178,9 @@ export default function Navbar() {
         </div>
       )}
 
-      {menuOpen && (
-        <button className="nav-backdrop" aria-label="Close menu" onClick={() => setMenuOpen(false)} />
+      {menuOpen && createPortal(
+        <button className="nav-backdrop" aria-label="Close menu" onClick={() => setMenuOpen(false)} />,
+        document.body,
       )}
 
       <div className={`nav-popover ${menuOpen ? 'open' : ''}`}>

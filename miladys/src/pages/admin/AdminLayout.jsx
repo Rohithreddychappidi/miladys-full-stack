@@ -41,7 +41,7 @@ function AdminLoginGate() {
       <Seo title="Admin Login" path="/admin" noindex />
       <form className="admin-gate-card" onSubmit={handleSubmit}>
         <div className="admin-brand">
-          <span className="brand-mark">✦</span> Milady&apos;s <span className="cms-tag">CMS</span>
+          <img src="/images/monogram.png" alt="" className="brand-mark" /> Milady&apos;s <span className="cms-tag">CMS</span>
         </div>
         <h1>Admin Login</h1>
         <label>
@@ -60,6 +60,7 @@ function AdminLoginGate() {
         .admin-gate { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--stone-100); }
         .admin-gate-card { width: 100%; max-width: 340px; background: var(--paper); border-radius: var(--radius-md); padding: 32px; display: flex; flex-direction: column; gap: 14px; }
         .admin-gate-card h1 { font-size: 20px; margin: 0 0 6px; color: var(--maroon-900); }
+        .admin-gate-card .admin-brand { color: var(--maroon-900); }
         .admin-gate-card label { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--ink-600); }
         .admin-gate-card input { padding: 11px 12px; border-radius: var(--radius-sm); border: 1px solid var(--stone-200); font-size: 13.5px; }
         .gate-error { font-size: 12.5px; color: #a13a3a; margin: 0; }
@@ -79,7 +80,7 @@ export default function AdminLayout() {
       <Seo title="Admin" path="/admin" noindex />
       <aside className="admin-sidebar">
         <div className="admin-brand">
-          <span className="brand-mark">✦</span> Milady&apos;s <span className="cms-tag">CMS</span>
+          <img src="/images/monogram-white.png" alt="" className="brand-mark" /> Milady&apos;s <span className="cms-tag">CMS</span>
         </div>
         <nav>
           {links.map((l) => (
@@ -123,6 +124,12 @@ export default function AdminLayout() {
           display: flex;
           align-items: center;
           gap: 8px;
+        }
+        .brand-mark {
+          width: 26px;
+          height: 26px;
+          object-fit: contain;
+          flex: 0 0 auto;
         }
         .cms-tag {
           font-family: var(--font-body);
