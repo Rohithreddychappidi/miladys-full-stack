@@ -7,6 +7,19 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#48181e" />
 
+    <!-- Must run synchronously, before React (or anything else) loads, and
+         before the browser applies its own automatic scroll-restoration
+         for this history entry. Doing this inside a React useEffect is too
+         late — the app has already mounted and painted by then, so the
+         browser can briefly jump to a remembered scroll position (often
+         showing the footer) right on load before React's own reset takes
+         over. Setting it here removes that window entirely. -->
+    <script>
+      if ('scrollRestoration' in window.history) {
+        window.history.scrollRestoration = 'manual';
+      }
+    </script>
+
     <title>Milady's — Premium Sarees</title>
     <meta name="description" content="Handwoven silks and everyday weaves, sourced directly from India's weaving clusters. Shop Kanjivaram, Banarasi, bridal and organza sarees at Milady's." />
     <meta name="keywords" content="sarees online, handloom sarees, Kanjivaram saree, Banarasi saree, silk saree, bridal saree, buy sarees online India, Milady's" />

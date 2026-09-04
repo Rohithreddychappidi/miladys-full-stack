@@ -53,7 +53,15 @@ export default function ProductDetail() {
     );
   }
 
-  if (!product) return null;
+  // While the product is loading (or if the fetch is slow), keep a
+  // full-height placeholder here instead of rendering nothing. Returning
+  // null collapses <main> to zero height for a moment, which pulls the
+  // Footer directly up under the Navbar — visible as a flash of the
+  // footer right after tapping a product, before the real content pops
+  // in and pushes it back down.
+  if (!product) {
+    return <div className="detail-page" style={{ minHeight: '100vh' }} />;
+  }
 
   const outOfStock = product.stock === 0;
   // Cover image plus any gallery photos, de-duplicated, so admins can
