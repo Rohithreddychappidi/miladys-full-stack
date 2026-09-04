@@ -6,7 +6,7 @@ const DEFAULT_IMAGE = `${SITE_URL}/images/model-saree.png`;
 const DEFAULT_DESCRIPTION =
   "Handwoven silks and everyday weaves, sourced directly from India's weaving clusters. Shop Kanjivaram, Banarasi, bridal and organza sarees at Milady's.";
 const DEFAULT_KEYWORDS =
-  'sarees online, handloom sarees, Kanjivaram saree, Banarasi saree, silk saree, bridal saree, buy sarees online India, Milady\'s';
+  "Milady's sarees, Milady's Hyderabad, pure silk sarees online India, Kanjivaram silk saree online, Banarasi silk saree online, pattu sarees online, South Indian bridal sarees, wedding sarees online India, organza sarees online, handloom sarees direct from weavers, sarees Hyderabad, sarees Tirupati";
 
 const JSONLD_ID = 'seo-jsonld';
 

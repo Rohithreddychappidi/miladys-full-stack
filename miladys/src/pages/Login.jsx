@@ -11,7 +11,11 @@ export default function Login() {
   const { login, signup } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const redirectTo = location.state?.from || '/profile';
+  // If the person was sent here from a protected page (e.g. checkout),
+  // send them back there after login. Otherwise — the normal "just
+  // visited /login directly" case — go to the homepage rather than the
+  // profile page.
+  const redirectTo = location.state?.from || '/';
 
   async function handleSubmit(e) {
     e.preventDefault();
