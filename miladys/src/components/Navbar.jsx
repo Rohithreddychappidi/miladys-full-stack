@@ -300,7 +300,20 @@ export default function Navbar() {
         .icon-btn:hover { color: var(--ivory); }
 
         .account-menu-wrap { position: relative; }
-        .account-menu-overlay { position: fixed; inset: 0; z-index: 199; }
+        .account-menu-overlay {
+          position: fixed;
+          inset: 0;
+          /* Must stay BELOW .navbar's own z-index (160). .navbar creates
+             its own stacking context (position: fixed + z-index), so
+             .account-menu's z-index: 200 only ever competes within that
+             context — it can never out-rank an element like this one that
+             lives outside it (portaled straight to <body>). If this value
+             is ever >= .navbar's z-index, this transparent click-catcher
+             ends up covering the whole dropdown and silently swallows
+             every click on it (Log In / Sign Up, My Orders, My Profile,
+             Log Out all stop working, menu just closes instead). */
+          z-index: 145;
+        }
         .account-menu {
           position: absolute;
           top: calc(100% + 10px);
