@@ -131,6 +131,31 @@ function layout({ preheader = '', content, ctaLabel, ctaUrl }) {
 
 // ---------------------------------------------------------------------
 
+export function sendPasswordResetEmail(user, resetUrl) {
+  const content = `
+    <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:400;color:${COLORS.maroon900};margin:0 0 16px;">
+      Hi ${escapeHtml(user.name)},
+    </h1>
+    <p style="font-size:14px;line-height:1.7;color:${COLORS.ink600};margin:0 0 8px;">
+      We got a request to reset the password on your Milady&rsquo;s account. Click the button below to choose a new one — this link expires in 30 minutes.
+    </p>
+    <p style="font-size:13px;line-height:1.7;color:${COLORS.ink400};margin:16px 0 0;">
+      If you didn&rsquo;t request this, you can safely ignore this email — your password won&rsquo;t change.
+    </p>
+  `;
+
+  return send({
+    to: user.email,
+    subject: "Reset your Milady's password",
+    html: layout({
+      preheader: `Reset your Milady's password — this link expires in 30 minutes.`,
+      content,
+      ctaLabel: 'Reset password',
+      ctaUrl: resetUrl,
+    }),
+  });
+}
+
 export function sendLoginEmail(user) {
   const content = `
     <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:400;color:${COLORS.maroon900};margin:0 0 16px;">

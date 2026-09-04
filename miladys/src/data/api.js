@@ -38,8 +38,11 @@ export const api = {
   // auth
   signup: (payload) => request('/api/auth/signup', { method: 'POST', body: payload, auth: false }),
   login: (payload) => request('/api/auth/login', { method: 'POST', body: payload, auth: false }),
+  forgotPassword: (payload) => request('/api/auth/forgot-password', { method: 'POST', body: payload, auth: false }),
+  resetPassword: (payload) => request('/api/auth/reset-password', { method: 'POST', body: payload, auth: false }),
   me: () => request('/api/auth/me'),
   updateMe: (payload) => request('/api/auth/me', { method: 'PUT', body: payload }),
+  changePassword: (payload) => request('/api/auth/change-password', { method: 'POST', body: payload }),
   getAddresses: () => request('/api/auth/addresses'),
   addAddress: (payload) => request('/api/auth/addresses', { method: 'POST', body: payload }),
   deleteAddress: (id) => request(`/api/auth/addresses/${id}`, { method: 'DELETE' }),

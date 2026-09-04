@@ -18,6 +18,8 @@ import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
 import Profile from './pages/Profile';
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import NotFound from './pages/NotFound';
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -49,6 +51,8 @@ function PublicSite() {
           <Route path="/checkout" element={<RequireAuth><Checkout /></RequireAuth>} />
           <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
           <Route path="/login" element={<Login />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

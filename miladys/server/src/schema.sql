@@ -11,6 +11,22 @@ CREATE TABLE IF NOT EXISTS users (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Forgot-password flow. We store a hash of the reset token (never the raw
+-- token itself — same reasoning as password_hash on users), so a leaked DB
+-- alone can't be used to reset anyone's account. The raw token only ever
+-- exists in the emailed link and briefly in memory on this request.
+CREATE TABLE IF NOT EXISTS password_resets (
+  id         SERIAL PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at    TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
+
+
 CREATE TABLE IF NOT EXISTS addresses (
   id         SERIAL PRIMARY KEY,
   user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

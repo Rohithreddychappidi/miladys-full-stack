@@ -33,13 +33,24 @@ export function AuthProvider({ children }) {
     return user;
   }
 
+  async function forgotPassword(email) {
+    return api.forgotPassword({ email });
+  }
+
+  async function resetPassword(token, newPassword) {
+    const { token: authToken, user } = await api.resetPassword({ token, newPassword });
+    setToken(authToken);
+    setUser(user);
+    return user;
+  }
+
   function logout() {
     setToken(null);
     setUser(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout, isAdmin: !!user?.isAdmin }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, logout, forgotPassword, resetPassword, isAdmin: !!user?.isAdmin }}>
       {children}
     </AuthContext.Provider>
   );

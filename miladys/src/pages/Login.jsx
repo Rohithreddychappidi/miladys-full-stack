@@ -66,6 +66,9 @@ export default function Login() {
               Password
               <input type="password" required minLength={6} value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
             </label>
+            {mode === 'login' && (
+              <Link to="/forgot-password" className="forgot-link">Forgot password?</Link>
+            )}
 
             {error && <p className="auth-error">{error}</p>}
 
@@ -102,6 +105,7 @@ export default function Login() {
           font-size: 13.5px;
         }
         .auth-error { font-size: 12.5px; color: #a13a3a; margin: 0; }
+        .forgot-link { align-self: flex-start; font-size: 12.5px; color: var(--gold-600); margin-top: -6px; }
         .auth-form .btn { margin-top: 6px; }
         .back-link { display: inline-block; margin-top: 20px; font-size: 12.5px; color: var(--ink-400); }
       `}</style>
