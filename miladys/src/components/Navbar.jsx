@@ -16,7 +16,6 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
   const [overHero, setOverHero] = useState(false);
   const [hasHero, setHasHero] = useState(false);
   const [query, setQuery] = useState('');
@@ -31,19 +30,18 @@ export default function Navbar() {
     setAccountOpen(false);
   }, [location.pathname]);
 
-  // On pages with a full-bleed hero (marked with id="page-hero"), the navbar
-  // stays fully transparent for as long as any part of the hero is still
-  // below it, then switches to the solid maroon bar once the hero has
-  // scrolled fully past. Pages without a hero just use the old scroll tint.
+  // On pages with a full-bleed hero (marked with id="page-hero" — only
+  // Home has one), the navbar stays fully transparent for as long as any
+  // part of the hero is still below it, then switches to the solid maroon
+  // bar once the hero has scrolled fully past. Every other page has no
+  // hero to be transparent over, so it should just be the solid maroon
+  // bar from the very first paint — no fading/shading in as you scroll.
   useEffect(() => {
     const heroEl = document.getElementById('page-hero');
 
     if (!heroEl || !('IntersectionObserver' in window)) {
       setHasHero(false);
-      const onScroll = () => setScrolled(window.scrollY > 8);
-      onScroll();
-      window.addEventListener('scroll', onScroll);
-      return () => window.removeEventListener('scroll', onScroll);
+      return undefined;
     }
 
     setHasHero(true);
@@ -56,7 +54,7 @@ export default function Navbar() {
     return () => observer.disconnect();
   }, [location.pathname]);
 
-  const navClass = hasHero ? (overHero ? 'is-transparent' : 'is-scrolled') : (scrolled ? 'is-scrolled' : '');
+  const navClass = hasHero ? (overHero ? 'is-transparent' : 'is-scrolled') : 'is-scrolled';
 
   function handleSearch(e) {
     e.preventDefault();
