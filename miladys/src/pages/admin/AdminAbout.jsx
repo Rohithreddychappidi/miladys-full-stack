@@ -1,14 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../data/api';
-
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
+import { compressImageFile } from '../../utils/compressImage';
 
 function GalleryEditor({ images = [], onChange }) {
   const fileInput = useRef(null);
@@ -19,7 +11,7 @@ function GalleryEditor({ images = [], onChange }) {
     if (!files.length) return;
     setBusy(true);
     try {
-      const added = await Promise.all(files.map((f) => readFileAsDataUrl(f)));
+      const added = await Promise.all(files.map((f) => compressImageFile(f)));
       onChange([...images, ...added]);
     } finally {
       setBusy(false);
@@ -86,7 +78,7 @@ export default function AdminAbout() {
   async function handleStoryImage(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const dataUrl = await readFileAsDataUrl(file);
+    const dataUrl = await compressImageFile(file);
     updateField('about_story', 'image', dataUrl);
   }
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../data/api';
+import { compressImageFile } from '../../utils/compressImage';
 
 const sectionLabels = {
   hero: 'Hero Banner',
@@ -65,9 +66,7 @@ function readFileAsDataUrl(file) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
-}
-
-function HeroSlidesEditor({ slides = [], onChange, sizeHint }) {
+}function HeroSlidesEditor({ slides = [], onChange, sizeHint }) {
   const photoInput = useRef(null);
   const videoInput = useRef(null);
   const [busy, setBusy] = useState(false);
@@ -77,7 +76,14 @@ function HeroSlidesEditor({ slides = [], onChange, sizeHint }) {
     if (!files.length) return;
     setBusy(true);
     try {
-      const added = await Promise.all(files.map(async (f) => ({ type, url: await readFileAsDataUrl(f) })));
+      // Images get resized/compressed like everywhere else. Video can't
+      // go through the same canvas-based resize, so it's still read raw
+      // — that's what the "keep clips short and compressed" hint below
+      // is warning about.
+      const added = await Promise.all(files.map(async (f) => ({
+        type,
+        url: type === 'video' ? await readFileAsDataUrl(f) : await compressImageFile(f, { maxDimension: 2000 }),
+      })));
       onChange([...slides, ...added]);
     } finally {
       setBusy(false);
@@ -157,7 +163,7 @@ export default function AdminHome() {
   async function handleStoryImage(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const dataUrl = await readFileAsDataUrl(file);
+    const dataUrl = await compressImageFile(file);
     updateField('story', 'image', dataUrl);
   }
 

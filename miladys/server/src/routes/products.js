@@ -6,9 +6,22 @@ const router = Router();
 
 router.get('/', async (req, res) => {
   const { category } = req.query;
+  // The collection grid only ever shows the cover thumbnail (`image`) per
+  // card — it never touches `images` (the full per-product photo gallery,
+  // shown only on the single-product detail page). That gallery column is
+  // JSONB full of base64 data URLs (every admin-uploaded photo, raw and
+  // uncompressed), so a `SELECT *` here was shipping every gallery photo
+  // of every product on every visit to /products — often tens of MB of
+  // JSON that has to fully download and parse before the grid can even
+  // start rendering, and unlike normal <img> URLs, data URLs don't get
+  // browser HTTP image caching either. Excluding it here (the detail
+  // route below still selects it, where it's actually needed) is what
+  // was making the collection page feel slow on every device equally —
+  // it was never a device/rendering issue, it was payload size.
+  const listColumns = 'id, name, category_id, price, mrp, stock, description, image, created_at';
   const { rows } = category
-    ? await query('SELECT * FROM products WHERE category_id = $1 ORDER BY created_at DESC', [category])
-    : await query('SELECT * FROM products ORDER BY created_at DESC');
+    ? await query(`SELECT ${listColumns} FROM products WHERE category_id = $1 ORDER BY created_at DESC`, [category])
+    : await query(`SELECT ${listColumns} FROM products ORDER BY created_at DESC`);
   res.json({ products: rows.map(mapProduct) });
 });
 

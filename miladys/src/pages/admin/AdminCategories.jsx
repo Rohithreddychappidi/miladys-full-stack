@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../data/api';
+import { compressImageFile } from '../../utils/compressImage';
 
 const emptyForm = { id: null, name: '', tagline: '', image: '' };
 
@@ -21,9 +22,7 @@ export default function AdminCategories() {
   function handleImage(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setForm((f) => ({ ...f, image: reader.result }));
-    reader.readAsDataURL(file);
+    compressImageFile(file).then((dataUrl) => setForm((f) => ({ ...f, image: dataUrl })));
   }
 
   function resetForm() {

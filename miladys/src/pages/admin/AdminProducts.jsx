@@ -1,17 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../data/api';
 import { formatINR } from '../../data/store';
+import { compressImageFile } from '../../utils/compressImage';
 
 const emptyForm = { name: '', category: '', price: '', mrp: '', stock: '', description: '', image: '', images: [] };
-
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
 
 function stockTone(stock) {
   if (stock === 0) return 'stock-out';
@@ -47,9 +39,7 @@ export default function AdminProducts() {
   function handleImage(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setForm((f) => ({ ...f, image: reader.result }));
-    reader.readAsDataURL(file);
+    compressImageFile(file).then((dataUrl) => setForm((f) => ({ ...f, image: dataUrl })));
   }
 
   async function handleGalleryFiles(e) {
@@ -57,7 +47,7 @@ export default function AdminProducts() {
     if (!files.length) return;
     setGalleryBusy(true);
     try {
-      const added = await Promise.all(files.map((f) => readFileAsDataUrl(f)));
+      const added = await Promise.all(files.map((f) => compressImageFile(f)));
       setForm((f) => ({ ...f, images: [...(f.images || []), ...added] }));
     } finally {
       setGalleryBusy(false);

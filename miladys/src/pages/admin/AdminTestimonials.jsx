@@ -1,16 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../data/api';
+import { compressImageFile } from '../../utils/compressImage';
 
 const emptyForm = { productId: '', name: '', rating: 5, text: '', photo: '', active: true };
-
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
 
 export default function AdminTestimonials() {
   const [products, setProducts] = useState([]);
@@ -44,7 +36,9 @@ export default function AdminTestimonials() {
   async function handlePhoto(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const dataUrl = await readFileAsDataUrl(file);
+    // A testimonial photo is shown as a small avatar, so a smaller cap
+    // than the default (used for product/hero photos) is plenty.
+    const dataUrl = await compressImageFile(file, { maxDimension: 600 });
     setForm((f) => ({ ...f, photo: dataUrl }));
   }
 
