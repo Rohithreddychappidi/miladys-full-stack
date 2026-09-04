@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import ProductCard from './ProductCard';
 import ScrollReveal from './ScrollReveal';
 import TextReveal from './TextReveal';
@@ -12,12 +12,16 @@ function pick(products, count, excludeId) {
 }
 
 export default function RecommendedProducts({ excludeId, title = 'Recommended For You' }) {
-  const [products, setProducts] = useState([]);
-
-  useEffect(() => {
-    setProducts(pick(getProducts(), 4, excludeId));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [excludeId]);
+  // getProducts() is synchronous (local seed data / localStorage, no
+  // network call), so there's no real loading state here. Computing this
+  // via useEffect + useState meant the section always mounted empty
+  // (zero height) for one tick before the effect ran and the grid popped
+  // in — pushing the Footer down right after the page had already
+  // settled, which is what showed up as a glitch near the bottom of
+  // product pages. useMemo computes it inline during render instead, so
+  // the grid is there from the very first paint.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const products = useMemo(() => pick(getProducts(), 4, excludeId), [excludeId]);
 
   if (products.length === 0) return null;
 
