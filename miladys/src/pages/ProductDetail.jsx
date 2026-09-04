@@ -105,6 +105,9 @@ export default function ProductDetail() {
           },
         }}
       />
+      <div className="sparkle-bg sparkle-bg-detail" aria-hidden="true">
+        <img src="/images/sparkle-bg.svg" alt="" />
+      </div>
       <div className="container detail-grid">
         <div className="detail-gallery">
           <div className="detail-image">
@@ -176,8 +179,13 @@ export default function ProductDetail() {
       <RecommendedProducts excludeId={product.id} />
 
       <style>{`
-        .detail-page { padding: 56px 0 0; }
+        .detail-page { padding: 56px 0 0; position: relative; overflow: hidden; }
+        .sparkle-bg { position: absolute; pointer-events: none; z-index: 0; }
+        .sparkle-bg img { width: 100%; height: auto; display: block; }
+        .sparkle-bg-detail { top: 120px; left: -90px; width: 280px; opacity: 0.12; }
         .detail-grid {
+          position: relative;
+          z-index: 1;
           display: grid;
           grid-template-columns: 0.9fr 1.1fr;
           gap: 60px;

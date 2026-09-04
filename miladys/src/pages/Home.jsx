@@ -134,6 +134,9 @@ export default function Home() {
       )}
 
       <section className="featured">
+        <div className="sparkle-bg sparkle-bg-featured" aria-hidden="true">
+          <img src="/images/sparkle-bg.svg" alt="" />
+        </div>
         <div className="container">
           <div className="section-head">
             <div>
@@ -265,7 +268,9 @@ export default function Home() {
           gap: 26px;
         }
 
-        .featured { background: var(--stone-100); }
+        .featured { background: var(--stone-100); position: relative; overflow: hidden; }
+        .featured .container { position: relative; z-index: 1; }
+        .sparkle-bg-featured { top: 50%; left: -90px; transform: translateY(-50%); width: 300px; opacity: 0.12; }
 
         .story-grid {
           position: relative;
