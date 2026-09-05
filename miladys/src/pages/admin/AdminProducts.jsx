@@ -3,7 +3,25 @@ import { api } from '../../data/api';
 import { formatINR } from '../../data/store';
 import { compressImageFile } from '../../utils/compressImage';
 
-const emptyForm = { name: '', category: '', price: '', mrp: '', stock: '', description: '', image: '', images: [] };
+const emptyForm = { name: '', category: '', price: '', mrp: '', discountPercent: '', stock: '', description: '', image: '', images: [] };
+
+// Keeps MRP / discount % / price in sync with each other, whichever one the
+// admin actually typed into. Rounds to whole rupees since that's what the
+// rest of the site displays.
+function discountFromPrices(mrp, price) {
+  const m = Number(mrp);
+  const p = Number(price);
+  if (!m || !p || p >= m) return '';
+  return Math.round(((m - p) / m) * 100);
+}
+
+function priceFromDiscount(mrp, discountPercent) {
+  const m = Number(mrp);
+  if (!m || discountPercent === '' || discountPercent === null || discountPercent === undefined) return '';
+  const pct = Number(discountPercent);
+  if (Number.isNaN(pct)) return '';
+  return Math.max(0, Math.round(m * (1 - pct / 100)));
+}
 
 function stockTone(stock) {
   if (stock === 0) return 'stock-out';
@@ -26,6 +44,7 @@ export default function AdminProducts() {
   const fileInput = useRef(null);
   const galleryInput = useRef(null);
   const [galleryBusy, setGalleryBusy] = useState(false);
+  const [movingId, setMovingId] = useState(null);
 
   useEffect(() => {
     refresh();
@@ -65,6 +84,35 @@ export default function AdminProducts() {
     if (fileInput.current) fileInput.current.value = '';
   }
 
+  // MRP changes: if a discount % is already set, recompute the price from
+  // it. Otherwise leave price alone — the admin may still be typing.
+  function handleMrpChange(value) {
+    setForm((f) => {
+      const next = { ...f, mrp: value };
+      if (f.discountPercent !== '') {
+        const price = priceFromDiscount(value, f.discountPercent);
+        if (price !== '') next.price = price;
+      }
+      return next;
+    });
+  }
+
+  // Discount % changes: always recompute price from MRP + this percentage.
+  function handleDiscountChange(value) {
+    setForm((f) => {
+      const next = { ...f, discountPercent: value };
+      const price = priceFromDiscount(f.mrp, value);
+      if (price !== '') next.price = price;
+      return next;
+    });
+  }
+
+  // Price typed directly (overriding the auto-calculated one): recompute
+  // the discount % to match, so the two never fall out of sync.
+  function handlePriceChange(value) {
+    setForm((f) => ({ ...f, price: value, discountPercent: discountFromPrices(f.mrp, value) }));
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     if (!form.name.trim() || !form.category) return;
@@ -100,6 +148,7 @@ export default function AdminProducts() {
       category: product.category,
       price: product.price,
       mrp: product.mrp,
+      discountPercent: discountFromPrices(product.mrp, product.price),
       stock: product.stock,
       description: product.description,
       image: product.image,
@@ -120,11 +169,30 @@ export default function AdminProducts() {
     }
   }
 
+  // Quick recategorize straight from the list, for when a product was
+  // uploaded under the wrong category — no need to open the full edit
+  // form just to fix that one field.
+  async function handleMoveCategory(product, newCategoryId) {
+    if (!newCategoryId || newCategoryId === product.category) return;
+    setMovingId(product.id);
+    try {
+      await api.updateProduct(product.id, { category: newCategoryId });
+      refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setMovingId(null);
+    }
+  }
+
   function categoryName(id) {
     return categories.find((c) => c.id === id)?.name || id;
   }
 
   const stockNum = form.stock === '' ? null : Number(form.stock) || 0;
+  const productsInCategory = form.category
+    ? products.filter((p) => p.category === form.category && p.id !== editingId)
+    : [];
 
   return (
     <div>
@@ -152,19 +220,41 @@ export default function AdminProducts() {
               />
             </label>
 
-            <label>
-              Category
-              <select
-                value={form.category}
-                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                required
-              >
-                <option value="" disabled>Choose a category</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </label>
+            <div className="category-picker">
+              <label>
+                Category
+                <select
+                  value={form.category}
+                  onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                  required
+                >
+                  <option value="" disabled>Choose a category</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              {form.category && (
+                <div className="category-preview">
+                  <p className="category-preview-title">
+                    Already in {categoryName(form.category)} ({productsInCategory.length})
+                  </p>
+                  {productsInCategory.length === 0 ? (
+                    <p className="category-preview-empty">Nothing here yet — this'll be the first.</p>
+                  ) : (
+                    <div className="category-preview-list">
+                      {productsInCategory.map((p) => (
+                        <div className="category-preview-item" key={p.id}>
+                          <img src={p.image} alt="" />
+                          <span>{p.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             <label>
               Description
@@ -181,15 +271,21 @@ export default function AdminProducts() {
             <p className="section-label">Pricing &amp; inventory</p>
             <div className="form-row">
               <label>
-                Price (₹)
-                <input type="number" min="0" value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} required />
+                MRP (₹)
+                <input type="number" min="0" value={form.mrp} placeholder="Original price" onChange={(e) => handleMrpChange(e.target.value)} />
               </label>
               <label>
-                MRP (₹)
-                <input type="number" min="0" value={form.mrp} placeholder="Same as price if blank" onChange={(e) => setForm((f) => ({ ...f, mrp: e.target.value }))} />
-                <span className="field-hint">Shown crossed out next to the price. Leave blank to hide the discount.</span>
+                Discount %
+                <input type="number" min="0" max="99" value={form.discountPercent} placeholder="e.g. 20" onChange={(e) => handleDiscountChange(e.target.value)} />
+                <span className="field-hint">Fills in the price below automatically.</span>
               </label>
             </div>
+
+            <label>
+              Price (₹) <span className="required-mark">*</span>
+              <input type="number" min="0" value={form.price} onChange={(e) => handlePriceChange(e.target.value)} required />
+              <span className="field-hint">Auto-calculated from MRP and discount % — edit directly to override.</span>
+            </label>
 
             <label>
               Stock <span className="required-mark">*</span>
@@ -277,6 +373,18 @@ export default function AdminProducts() {
                 </div>
                 <span className={`stock-badge ${stockTone(p.stock)}`}>{stockLabel(p.stock)}</span>
                 <div className="row-actions">
+                  <select
+                    className="row-move-select"
+                    value={p.category}
+                    disabled={movingId === p.id}
+                    onChange={(e) => handleMoveCategory(p, e.target.value)}
+                    aria-label={`Move ${p.name} to a different category`}
+                    title="Move to a different category"
+                  >
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
                   <button onClick={() => handleEdit(p)}>Edit</button>
                   <button onClick={() => handleDelete(p.id)} className="danger">Delete</button>
                 </div>
@@ -331,6 +439,25 @@ export default function AdminProducts() {
         }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .field-hint { font-size: 11.5px; color: var(--ink-400); line-height: 1.6; }
+
+        .category-picker { display: flex; gap: 14px; align-items: flex-start; }
+        .category-picker > label { flex: 1; min-width: 0; }
+        .category-preview {
+          flex: 0 0 170px;
+          border: 1px solid var(--stone-200);
+          border-radius: var(--radius-sm);
+          padding: 10px;
+          max-height: 168px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .category-preview-title { font-size: 11px; font-weight: 600; color: var(--ink-600); margin: 0; }
+        .category-preview-empty { font-size: 11.5px; color: var(--ink-400); margin: 0; line-height: 1.5; }
+        .category-preview-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+        .category-preview-item { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--ink-600); }
+        .category-preview-item img { width: 26px; height: 26px; border-radius: 6px; object-fit: cover; flex: 0 0 auto; }
+        .category-preview-item span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .stock-warning {
           font-size: 11.5px;
           color: #8a5a10;
@@ -403,20 +530,31 @@ export default function AdminProducts() {
         .stock-low { background: #fbeacb; color: #8a5a10; }
         .stock-out { background: #f6e3e3; color: #a13a3a; }
 
-        .row-actions { display: flex; gap: 10px; flex: 0 0 auto; }
+        .row-actions { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
         .row-actions button { background: none; border: none; font-size: 12.5px; color: var(--maroon-900); }
         .row-actions .danger { color: #a13a3a; }
+        .row-move-select {
+          font-size: 11.5px;
+          padding: 6px 8px;
+          border-radius: var(--radius-sm);
+          border: 1px solid var(--stone-200);
+          background: var(--paper);
+          color: var(--ink-600);
+          max-width: 130px;
+        }
         .empty { color: var(--ink-400); font-size: 13.5px; }
         @media (max-width: 980px) {
           .cms-layout { grid-template-columns: 1fr; }
         }
         @media (max-width: 640px) {
           .form-row { grid-template-columns: 1fr; }
+          .category-picker { flex-direction: column; }
+          .category-preview { flex-basis: auto; width: 100%; }
           .cms-row { flex-wrap: wrap; }
           .row-info { flex-basis: 100%; order: 1; }
           .row-thumb-sq { order: 0; }
           .stock-badge { order: 2; }
-          .row-actions { order: 3; margin-left: auto; }
+          .row-actions { order: 3; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
         }
       `}</style>
     </div>
