@@ -7,7 +7,8 @@ const sectionLabels = {
   showcase: 'Our Collections (rail)',
   featured_categories: 'Shop by Category',
   promo_banner: 'Promo Banner',
-  featured: 'Featured Sarees (heading)',
+  featured: 'Featured Sarees',
+  recommended: 'Recommended Sarees',
   story: 'Our Craft',
   testimonials: 'Testimonials Heading',
   social_links: 'Footer — Social & Contact Links',
@@ -39,6 +40,9 @@ const sectionFields = {
   ],
   featured: [
     { key: 'eyebrow', label: 'Small label above heading', type: 'text' },
+    { key: 'heading', label: 'Heading', type: 'text' },
+  ],
+  recommended: [
     { key: 'heading', label: 'Heading', type: 'text' },
   ],
   story: [
@@ -137,8 +141,80 @@ function readFileAsDataUrl(file) {
   );
 }
 
+// Search-and-select picker for curating which products show in the
+// "Featured Sarees" / "Recommended Sarees" home sections. Selection order
+// is the display order — reorder with the arrows on each chip.
+function ProductPicker({ products, selectedIds = [], onChange, max = 12 }) {
+  const [query, setQuery] = useState('');
+  const selected = selectedIds.map((id) => products.find((p) => p.id === id)).filter(Boolean);
+  const q = query.trim().toLowerCase();
+  const results = q
+    ? products.filter((p) => !selectedIds.includes(p.id) && p.name.toLowerCase().includes(q)).slice(0, 8)
+    : [];
+
+  function add(id) {
+    if (selectedIds.includes(id) || selectedIds.length >= max) return;
+    onChange([...selectedIds, id]);
+    setQuery('');
+  }
+  function remove(id) {
+    onChange(selectedIds.filter((x) => x !== id));
+  }
+  function move(index, dir) {
+    const target = index + dir;
+    if (target < 0 || target >= selectedIds.length) return;
+    const next = [...selectedIds];
+    [next[index], next[target]] = [next[target], next[index]];
+    onChange(next);
+  }
+
+  return (
+    <div className="product-picker">
+      {selected.length > 0 && (
+        <div className="picker-selected">
+          {selected.map((p, i) => (
+            <div className="picker-chip" key={p.id}>
+              <img src={p.image} alt="" />
+              <span className="picker-chip-name">{p.name}</span>
+              <div className="picker-chip-actions">
+                <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move ${p.name} up`}>↑</button>
+                <button type="button" onClick={() => move(i, 1)} disabled={i === selected.length - 1} aria-label={`Move ${p.name} down`}>↓</button>
+                <button type="button" onClick={() => remove(p.id)} aria-label={`Remove ${p.name}`} className="picker-chip-remove">×</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <input
+        type="text"
+        placeholder={selectedIds.length >= max ? `Up to ${max} selected` : 'Search products to add...'}
+        value={query}
+        disabled={selectedIds.length >= max}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+
+      {results.length > 0 && (
+        <div className="picker-results">
+          {results.map((p) => (
+            <button type="button" key={p.id} className="picker-result-item" onClick={() => add(p.id)}>
+              <img src={p.image} alt="" />
+              <span>{p.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {selectedIds.length === 0 && (
+        <p className="field-hint">Nothing picked yet — falls back to the automatic default until you add at least one.</p>
+      )}
+    </div>
+  );
+}
+
 export default function AdminHome() {
   const [sections, setSections] = useState([]);
+  const [products, setProducts] = useState([]);
   const [drafts, setDrafts] = useState({});
   const [error, setError] = useState('');
   const [savedKey, setSavedKey] = useState('');
@@ -154,6 +230,7 @@ export default function AdminHome() {
         setDrafts(map);
       })
       .catch((err) => setError(err.message));
+    api.getProducts().then(({ products }) => setProducts(products)).catch(() => {});
   }, []);
 
   function updateField(key, field, value) {
@@ -272,6 +349,23 @@ export default function AdminHome() {
                 </label>
               )}
 
+              {(s.section_key === 'featured' || s.section_key === 'recommended') && (
+                <label className="field-label">
+                  {s.section_key === 'featured' ? 'Products shown in this section' : 'Products shown as recommendations'}
+                  <ProductPicker
+                    products={products}
+                    selectedIds={draft.productIds || []}
+                    onChange={(ids) => updateField(s.section_key, 'productIds', ids)}
+                    max={s.section_key === 'featured' ? 4 : 12}
+                  />
+                  <span className="field-hint">
+                    {s.section_key === 'featured'
+                      ? 'Shows exactly these, in this order. Leave empty to automatically show the 4 most recently added products.'
+                      : 'Shown at the bottom of the home page and on every product page (the product being viewed is skipped automatically). Leave empty for a random pick from the catalog each time.'}
+                  </span>
+                </label>
+              )}
+
               <div className="section-card-foot">
                 <button className="btn btn-primary" onClick={() => handleSave(s.section_key)}>Save</button>
                 {savedKey === s.section_key && <span className="saved-msg">Saved ✓</span>}
@@ -314,6 +408,60 @@ export default function AdminHome() {
 
         .story-preview { width: 90px; height: 90px; border-radius: var(--radius-sm); overflow: hidden; margin-top: 4px; }
         .story-preview img { width: 100%; height: 100%; object-fit: cover; }
+
+        .product-picker { display: flex; flex-direction: column; gap: 8px; }
+        .product-picker input[type="text"] { padding: 11px 12px; border-radius: var(--radius-sm); border: 1px solid var(--stone-200); font-family: var(--font-body); font-size: 13.5px; }
+        .picker-selected { display: flex; flex-direction: column; gap: 6px; }
+        .picker-chip {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 6px 8px;
+          border-radius: var(--radius-sm);
+          border: 1px solid var(--stone-200);
+          background: var(--paper);
+        }
+        .picker-chip img { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; flex: 0 0 auto; }
+        .picker-chip-name { flex: 1; font-size: 12.5px; color: var(--ink-700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .picker-chip-actions { display: flex; gap: 4px; flex: 0 0 auto; }
+        .picker-chip-actions button {
+          width: 22px;
+          height: 22px;
+          border-radius: 6px;
+          border: 1px solid var(--stone-200);
+          background: var(--ivory);
+          font-size: 11px;
+          color: var(--ink-600);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .picker-chip-actions button:disabled { opacity: 0.35; }
+        .picker-chip-remove { color: #a13a3a !important; }
+        .picker-results {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          max-height: 220px;
+          overflow-y: auto;
+          border: 1px solid var(--stone-200);
+          border-radius: var(--radius-sm);
+          padding: 6px;
+        }
+        .picker-result-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 6px 8px;
+          border-radius: 8px;
+          background: none;
+          border: none;
+          text-align: left;
+          font-size: 12.5px;
+          color: var(--ink-700);
+        }
+        .picker-result-item:hover { background: var(--blush-400); }
+        .picker-result-item img { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; flex: 0 0 auto; }
 
         .slides-editor { display: flex; flex-direction: column; gap: 12px; }
         .slides-grid { display: flex; flex-wrap: wrap; gap: 10px; }

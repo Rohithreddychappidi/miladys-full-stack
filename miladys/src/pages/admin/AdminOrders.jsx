@@ -15,6 +15,8 @@ export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [invoiceId, setInvoiceId] = useState(null);
+  const [invoiceError, setInvoiceError] = useState(null); // { id, message }
 
   useEffect(() => {
     api
@@ -23,6 +25,18 @@ export default function AdminOrders() {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
+
+  async function handleDownloadInvoice(order) {
+    setInvoiceError(null);
+    setInvoiceId(order.id);
+    try {
+      await api.downloadInvoice(order.id);
+    } catch (err) {
+      setInvoiceError({ id: order.id, message: err.message });
+    } finally {
+      setInvoiceId(null);
+    }
+  }
 
   return (
     <div>
@@ -95,6 +109,20 @@ export default function AdminOrders() {
                 {o.discount > 0 && <span>Subtotal {formatINR(o.subtotal)}</span>}
                 <strong>{formatINR(o.subtotal - (o.discount || 0))}</strong>
               </div>
+
+              {o.paid_at && (
+                <div className="order-row-invoice">
+                  <button
+                    type="button"
+                    className="btn btn-outline invoice-btn"
+                    disabled={invoiceId === o.id}
+                    onClick={() => handleDownloadInvoice(o)}
+                  >
+                    {invoiceId === o.id ? 'Preparing…' : 'Download Invoice'}
+                  </button>
+                  {invoiceError && invoiceError.id === o.id && <span className="invoice-error">{invoiceError.message}</span>}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -178,6 +206,9 @@ export default function AdminOrders() {
 
         .order-row-foot { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: var(--ink-400); align-items: center; }
         .order-row-foot strong { margin-left: auto; color: var(--maroon-900); font-size: 14px; }
+        .order-row-invoice { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--stone-100); }
+        .invoice-btn { font-size: 12px; padding: 8px 16px; }
+        .invoice-error { font-size: 11.5px; color: #a13a3a; }
       `}</style>
     </div>
   );

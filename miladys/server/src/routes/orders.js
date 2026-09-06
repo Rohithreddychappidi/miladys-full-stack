@@ -3,6 +3,7 @@ import { query, pool } from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { razorpay, razorpayEnabled, verifyPaymentSignature } from '../lib/razorpay.js';
 import { sendOrderConfirmationEmail, sendCancellationEmail } from '../lib/email.js';
+import { renderInvoice } from '../lib/invoice.js';
 import { findUsableCoupon, computeDiscount } from './coupons.js';
 import { findApplicableTier } from './cancellationPolicy.js';
 
@@ -266,6 +267,30 @@ router.get('/admin/all', requireAdmin, async (_req, res) => {
     ? await query('SELECT * FROM order_items WHERE order_id = ANY($1)', [orders.map((o) => o.id)])
     : { rows: [] };
   res.json({ orders: orders.map((o) => ({ ...o, items: items.filter((i) => i.order_id === o.id) })) });
+});
+
+// GET /api/orders/:id/invoice — PDF invoice/receipt for one order.
+// Available to the order's own owner or an admin — nobody else, even with
+// a guessed order id, since this carries the customer's address and
+// payment id.
+router.get('/:id/invoice', requireAuth, async (req, res) => {
+  const { rows } = await query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+  const order = rows[0];
+  if (!order) return res.status(404).json({ error: 'Order not found.' });
+  if (order.user_id !== req.user.id && !req.user.isAdmin) {
+    return res.status(403).json({ error: 'Not allowed.' });
+  }
+  // An invoice only makes sense once money has actually moved.
+  if (!order.paid_at) {
+    return res.status(400).json({ error: 'This order has not been paid yet — no invoice to generate.' });
+  }
+
+  const { rows: items } = await query('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [order.id]);
+  const { rows: userRows } = await query('SELECT name, email FROM users WHERE id = $1', [order.user_id]);
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="Miladys-Invoice-${order.id}.pdf"`);
+  renderInvoice(res, { order, items, customer: userRows[0] });
 });
 
 export default router;

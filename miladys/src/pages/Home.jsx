@@ -28,6 +28,11 @@ const defaults = {
   featured: {
     eyebrow: 'This week',
     heading: 'Featured Sarees',
+    productIds: [],
+  },
+  recommended: {
+    heading: 'Recommended For You',
+    productIds: [],
   },
   story: {
     eyebrow: 'Our craft',
@@ -45,6 +50,7 @@ export default function Home() {
   const [hero, setHero] = useState(defaults.hero);
   const [showcase, setShowcase] = useState(defaults.showcase);
   const [featured, setFeatured] = useState(defaults.featured);
+  const [recommended, setRecommended] = useState(defaults.recommended);
   const [story, setStory] = useState(defaults.story);
   const [promo, setPromo] = useState(null);
 
@@ -62,11 +68,19 @@ export default function Home() {
         if (byKey.hero) setHero({ ...defaults.hero, ...byKey.hero });
         if (byKey.showcase) setShowcase({ ...defaults.showcase, ...byKey.showcase });
         if (byKey.featured) setFeatured({ ...defaults.featured, ...byKey.featured });
+        if (byKey.recommended) setRecommended({ ...defaults.recommended, ...byKey.recommended });
         if (byKey.story) setStory({ ...defaults.story, ...byKey.story });
         if (byKey.promo_banner) setPromo(byKey.promo_banner);
       })
       .catch(() => {});
   }, []);
+
+  // Admin's hand-picked list from /admin/home, in the order they set it —
+  // falls back to the 4 most recently added products when nothing's been
+  // curated yet, same as the original behavior.
+  const featuredProducts = featured.productIds?.length
+    ? featured.productIds.map((id) => products.find((p) => p.id === id)).filter(Boolean)
+    : products.slice(0, 4);
 
   return (
     <div className="home">
@@ -145,7 +159,7 @@ export default function Home() {
             </div>
           </div>
           <ScrollReveal delay={0.15} className="product-grid">
-            {products.slice(0, 4).map((p) => (
+            {featuredProducts.map((p) => (
               <ProductCard key={p.id} product={p} hidePrice />
             ))}
           </ScrollReveal>
@@ -173,7 +187,7 @@ export default function Home() {
         </div>
       </section>
 
-      <RecommendedProducts />
+      <RecommendedProducts products={products} curatedIds={recommended.productIds} title={recommended.heading} />
 
       <TestimonialBand />
 

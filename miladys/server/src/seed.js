@@ -55,9 +55,19 @@ const homeSections = [
     ctaLabel: 'Explore now',
     ctaLink: '/products',
   } },
-  { key: 'featured', title: 'Featured Sarees (heading)', sort: 5, content: {
+  { key: 'featured', title: 'Featured Sarees', sort: 5, content: {
     eyebrow: 'This week',
     heading: 'Featured Sarees',
+    // Hand-picked product ids, in display order. Empty = automatically
+    // show the 4 most recently added products.
+    productIds: [],
+  } },
+  { key: 'recommended', title: 'Recommended Sarees', sort: 5, content: {
+    heading: 'Recommended For You',
+    // Hand-picked product ids shown at the bottom of Home and on every
+    // product page (current product skipped automatically). Empty = a
+    // random pick from the catalog each time.
+    productIds: [],
   } },
   { key: 'story', title: 'Our Craft', sort: 6, content: {
     eyebrow: 'Our craft',

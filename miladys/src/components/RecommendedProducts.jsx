@@ -1,29 +1,25 @@
-import { useMemo } from 'react';
 import ProductCard from './ProductCard';
 import ScrollReveal from './ScrollReveal';
 import TextReveal from './TextReveal';
-import { getProducts } from '../data/store';
 
 // Deterministic-ish shuffle so it doesn't feel identical to the featured grid on Home
-function pick(products, count, excludeId) {
+function pickRandom(products, count, excludeId) {
   const pool = products.filter((p) => p.id !== excludeId);
   const shuffled = [...pool].sort(() => 0.5 - Math.random());
   return shuffled.slice(0, count);
 }
 
-export default function RecommendedProducts({ excludeId, title = 'Recommended For You' }) {
-  // getProducts() is synchronous (local seed data / localStorage, no
-  // network call), so there's no real loading state here. Computing this
-  // via useEffect + useState meant the section always mounted empty
-  // (zero height) for one tick before the effect ran and the grid popped
-  // in — pushing the Footer down right after the page had already
-  // settled, which is what showed up as a glitch near the bottom of
-  // product pages. useMemo computes it inline during render instead, so
-  // the grid is there from the very first paint.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const products = useMemo(() => pick(getProducts(), 4, excludeId), [excludeId]);
+// `products` is the already-fetched live catalog (passed down from the
+// page, not fetched here — see Home.jsx / ProductDetail.jsx). `curatedIds`
+// is the admin's hand-picked list from the "Recommended Sarees" section in
+// /admin/home, in the order they set it; when empty, falls back to a
+// random pick from the real catalog, same as before.
+export default function RecommendedProducts({ products = [], curatedIds = [], excludeId, title = 'Recommended For You' }) {
+  const picked = curatedIds.length > 0
+    ? curatedIds.map((id) => products.find((p) => p.id === id)).filter((p) => p && p.id !== excludeId)
+    : pickRandom(products, 4, excludeId);
 
-  if (products.length === 0) return null;
+  if (picked.length === 0) return null;
 
   return (
     <section className="recommended">
@@ -31,7 +27,7 @@ export default function RecommendedProducts({ excludeId, title = 'Recommended Fo
         <TextReveal as="p" direction="fade" className="eyebrow">You might also like</TextReveal>
         <TextReveal as="h2" delay={0.08} direction="left" distance={32}>{title}</TextReveal>
         <ScrollReveal delay={0.15} className="recommended-grid">
-          {products.map((p) => (
+          {picked.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}
         </ScrollReveal>

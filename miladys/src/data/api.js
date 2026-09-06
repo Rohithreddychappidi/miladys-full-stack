@@ -34,6 +34,37 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
   return data;
 }
 
+// Separate from request() above because this response is a PDF file, not
+// JSON — fetched manually (rather than a plain <a href>) so the JWT auth
+// header actually gets attached, then handed to the browser as a
+// synthetic download via a temporary object URL.
+async function downloadFile(path, filename) {
+  const token = getToken();
+  const headers = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, { headers });
+  } catch {
+    throw new Error('Could not reach the server. Is the backend running?');
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Could not download the file.');
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export const api = {
   // auth
   signup: (payload) => request('/api/auth/signup', { method: 'POST', body: payload, auth: false }),
@@ -77,6 +108,7 @@ export const api = {
   verifyOrder: (payload) => request('/api/orders/verify', { method: 'POST', body: payload }),
   getMyOrders: () => request('/api/orders'),
   getAllOrders: () => request('/api/orders/admin/all'),
+  downloadInvoice: (id) => downloadFile(`/api/orders/${id}/invoice`, `Miladys-Invoice-${id}.pdf`),
 
   // coupons
   validateCoupon: (payload) => request('/api/coupons/validate', { method: 'POST', body: payload }),

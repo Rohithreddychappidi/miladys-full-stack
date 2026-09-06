@@ -17,8 +17,24 @@ export default function ProductDetail() {
   const [added, setAdded] = useState(false);
   const [testimonials, setTestimonials] = useState([]);
   const [activeImage, setActiveImage] = useState(null);
+  const [allProducts, setAllProducts] = useState(null);
+  const [recommended, setRecommended] = useState({ heading: 'Recommended For You', productIds: [] });
   const { addItem } = useCart();
   const navigate = useNavigate();
+
+  // The full product list (for "Recommended") and the admin's curated
+  // "Recommended Sarees" picks are site-wide, not per-product — fetched
+  // once here rather than on every product navigation.
+  useEffect(() => {
+    let active = true;
+    api.getProducts().then(({ products }) => active && setAllProducts(products)).catch(() => active && setAllProducts([]));
+    api.getHomeSections().then(({ sections }) => {
+      if (!active) return;
+      const section = sections.find((s) => s.section_key === 'recommended');
+      if (section?.content) setRecommended((prev) => ({ ...prev, ...section.content }));
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -53,13 +69,13 @@ export default function ProductDetail() {
     );
   }
 
-  // While the product is loading (or if the fetch is slow), keep a
-  // full-height placeholder here instead of rendering nothing. Returning
+  // While the product (or the recommended-products data) is loading, keep
+  // a full-height placeholder here instead of rendering nothing. Returning
   // null collapses <main> to zero height for a moment, which pulls the
   // Footer directly up under the Navbar — visible as a flash of the
   // footer right after tapping a product, before the real content pops
   // in and pushes it back down.
-  if (!product) {
+  if (!product || allProducts === null) {
     return <div className="detail-page" style={{ minHeight: '100vh' }} />;
   }
 
@@ -176,7 +192,12 @@ export default function ProductDetail() {
         <ReviewsCarousel productId={product.id} />
       </div>
 
-      <RecommendedProducts excludeId={product.id} />
+      <RecommendedProducts
+        products={allProducts}
+        curatedIds={recommended.productIds}
+        title={recommended.heading}
+        excludeId={product.id}
+      />
 
       <style>{`
         .detail-page { padding: 56px 0 0; position: relative; overflow: hidden; }

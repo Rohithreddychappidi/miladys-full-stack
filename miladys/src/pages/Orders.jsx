@@ -32,6 +32,9 @@ export default function Orders() {
   const [error, setError] = useState('');
   const [cancellingId, setCancellingId] = useState(null);
   const [cancelError, setCancelError] = useState('');
+  const [products, setProducts] = useState([]);
+  const [invoiceId, setInvoiceId] = useState(null);
+  const [invoiceError, setInvoiceError] = useState(null); // { id, message }
 
   useEffect(() => {
     api
@@ -40,7 +43,20 @@ export default function Orders() {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
     api.getCancellationPolicy().then(({ policy }) => setPolicy(policy)).catch(() => {});
+    api.getProducts().then(({ products }) => setProducts(products)).catch(() => {});
   }, []);
+
+  async function handleDownloadInvoice(order) {
+    setInvoiceError(null);
+    setInvoiceId(order.id);
+    try {
+      await api.downloadInvoice(order.id);
+    } catch (err) {
+      setInvoiceError({ id: order.id, message: err.message });
+    } finally {
+      setInvoiceId(null);
+    }
+  }
 
   function tierFor(order) {
     const days = daysSince(order.paid_at);
@@ -127,16 +143,29 @@ export default function Orders() {
                     </p>
                   )}
 
-                  {canCancel && (
-                    <button
-                      type="button"
-                      className="btn btn-outline cancel-btn"
-                      disabled={cancellingId === o.id}
-                      onClick={() => handleCancel(o)}
-                    >
-                      {cancellingId === o.id ? 'Cancelling…' : 'Cancel Order'}
-                    </button>
-                  )}
+                  <div className="order-card-actions">
+                    {o.paid_at && (
+                      <button
+                        type="button"
+                        className="btn btn-outline invoice-btn"
+                        disabled={invoiceId === o.id}
+                        onClick={() => handleDownloadInvoice(o)}
+                      >
+                        {invoiceId === o.id ? 'Preparing…' : 'Download Invoice'}
+                      </button>
+                    )}
+                    {canCancel && (
+                      <button
+                        type="button"
+                        className="btn btn-outline cancel-btn"
+                        disabled={cancellingId === o.id}
+                        onClick={() => handleCancel(o)}
+                      >
+                        {cancellingId === o.id ? 'Cancelling…' : 'Cancel Order'}
+                      </button>
+                    )}
+                  </div>
+                  {invoiceError && invoiceError.id === o.id && <p className="empty-msg error invoice-error">{invoiceError.message}</p>}
                 </div>
               );
             })}
@@ -144,7 +173,7 @@ export default function Orders() {
         )}
       </div>
 
-      <RecommendedProducts title="Shop Again" />
+      <RecommendedProducts products={products} title="Shop Again" />
 
       <style>{`
         .orders-page { padding: 56px 0 0; }
@@ -205,7 +234,9 @@ export default function Orders() {
         .payment-id { display: block; font-size: 11px; color: var(--ink-400); margin-top: 2px; }
 
         .refund-note { font-size: 12px; color: #3c7a3c; margin: 12px 0 0; }
-        .cancel-btn { margin-top: 14px; font-size: 12.5px; padding: 9px 18px; }
+        .order-card-actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+        .invoice-btn, .cancel-btn { font-size: 12.5px; padding: 9px 18px; margin-top: 0; }
+        .invoice-error { padding: 8px 0 0; font-size: 12px; }
 
         @media (max-width: 600px) {
           .order-card-foot { flex-direction: column; align-items: flex-start; }
