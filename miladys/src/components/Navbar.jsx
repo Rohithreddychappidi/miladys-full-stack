@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../data/api';
+import { formatINR } from '../data/store';
 
 const links = [
   { to: '/', label: 'Home' },
@@ -19,6 +21,7 @@ export default function Navbar() {
   const [overHero, setOverHero] = useState(false);
   const [hasHero, setHasHero] = useState(false);
   const [query, setQuery] = useState('');
+  const [searchProducts, setSearchProducts] = useState(null);
   const { count } = useCart();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -58,9 +61,27 @@ export default function Navbar() {
 
   function handleSearch(e) {
     e.preventDefault();
-    navigate(query.trim() ? `/products?search=${encodeURIComponent(query.trim())}` : '/products');
+    goToSearch(query);
+  }
+
+  function goToSearch(term) {
+    navigate(term.trim() ? `/products?search=${encodeURIComponent(term.trim())}` : '/products');
     setSearchOpen(false);
   }
+
+  // The product list for suggestions is fetched once, the first time the
+  // search bar is opened — not on every page load — and reused after that.
+  useEffect(() => {
+    if (searchOpen && searchProducts === null) {
+      api.getProducts().then(({ products }) => setSearchProducts(products)).catch(() => setSearchProducts([]));
+    }
+  }, [searchOpen, searchProducts]);
+
+  const suggestions = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q || !searchProducts) return [];
+    return searchProducts.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 5);
+  }, [query, searchProducts]);
 
   return (
     <header className={`navbar ${navClass}`}>
@@ -91,7 +112,7 @@ export default function Navbar() {
             className="icon-btn"
             aria-label="Search"
             aria-expanded={searchOpen}
-            onClick={() => setSearchOpen((v) => !v)}
+            onClick={() => { setSearchOpen((v) => !v); setMenuOpen(false); setAccountOpen(false); }}
           >
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.6" />
@@ -158,22 +179,54 @@ export default function Navbar() {
       </div>
 
       {searchOpen && (
-        <div className="search-bar">
-          <form className="container search-form" onSubmit={handleSearch}>
-            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <circle cx="9" cy="9" r="6.5" stroke="currentColor" strokeWidth="1.4" />
-              <line x1="14" y1="14" x2="18.5" y2="18.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-            </svg>
-            <input
-              type="search"
-              autoFocus
-              placeholder="Search sarees..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-label="Search products"
-            />
-          </form>
-        </div>
+        <>
+          {createPortal(
+            <button className="search-backdrop" aria-label="Close search" onClick={() => setSearchOpen(false)} />,
+            document.body,
+          )}
+          <div className="search-bar">
+            <form className="container search-form" onSubmit={handleSearch}>
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <circle cx="9" cy="9" r="6.5" stroke="currentColor" strokeWidth="1.4" />
+                <line x1="14" y1="14" x2="18.5" y2="18.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+              <input
+                type="search"
+                autoFocus
+                placeholder="Search sarees..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                aria-label="Search products"
+              />
+            </form>
+
+            {query.trim() && (
+              <div className="search-suggestions container">
+                {suggestions.length > 0 ? (
+                  <>
+                    {suggestions.map((p) => (
+                      <Link
+                        key={p.id}
+                        to={`/products/${p.id}`}
+                        className="search-suggestion-item"
+                        onClick={() => setSearchOpen(false)}
+                      >
+                        <img src={p.image} alt="" />
+                        <span className="search-suggestion-name">{p.name}</span>
+                        <span className="search-suggestion-price">{formatINR(p.price)}</span>
+                      </Link>
+                    ))}
+                    <button type="button" className="search-see-all" onClick={() => goToSearch(query)}>
+                      See all results for &ldquo;{query.trim()}&rdquo;
+                    </button>
+                  </>
+                ) : (
+                  <p className="search-no-results">No matches for &ldquo;{query.trim()}&rdquo; — press Enter to search anyway.</p>
+                )}
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {menuOpen && createPortal(
@@ -370,6 +423,8 @@ export default function Navbar() {
         }
 
         .search-bar {
+          position: relative;
+          z-index: 1;
           margin: 8px 16px 0;
           border-radius: 22px;
           background: var(--maroon-950);
@@ -398,11 +453,56 @@ export default function Navbar() {
         }
         .search-form input::placeholder { color: var(--blush-300); opacity: 0.7; }
 
+        .search-suggestions {
+          background: var(--ivory);
+          border-radius: 0 0 22px 22px;
+          padding: 6px 10px 10px;
+          display: flex;
+          flex-direction: column;
+        }
+        .search-suggestion-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 10px;
+          border-radius: 12px;
+          color: var(--ink-700);
+        }
+        .search-suggestion-item:hover { background: var(--blush-400); }
+        .search-suggestion-item img { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; flex: 0 0 auto; }
+        .search-suggestion-name { flex: 1; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .search-suggestion-price { font-size: 12px; color: var(--ink-400); flex: 0 0 auto; }
+        .search-see-all {
+          background: none;
+          border: none;
+          text-align: left;
+          padding: 10px;
+          font-size: 12.5px;
+          color: var(--maroon-900);
+          font-weight: 600;
+        }
+        .search-no-results { padding: 10px; font-size: 12.5px; color: var(--ink-400); margin: 0; }
+
         .nav-backdrop {
           position: fixed;
           inset: 0;
           z-index: 150;
           background: rgba(36,26,23,0.25);
+          border: none;
+          padding: 0;
+          cursor: default;
+        }
+
+        .search-backdrop {
+          /* Transparent click-catcher, same reasoning as account-menu-overlay:
+             must stay below .navbar's own z-index (160) — .navbar creates its
+             own stacking context, so anything portaled outside it with a
+             z-index >= 160 would sit on top of the search bar/suggestions
+             instead of behind them and swallow every click on it. */
+          position: fixed;
+          inset: 0;
+          z-index: 145;
+          background: transparent;
           border: none;
           padding: 0;
           cursor: default;
