@@ -80,12 +80,14 @@ export const api = {
 
   // categories
   getCategories: () => request('/api/categories', { auth: false }),
+  getAllCategoriesAdmin: () => request('/api/categories/admin/all'),
   createCategory: (payload) => request('/api/categories', { method: 'POST', body: payload }),
   updateCategory: (id, payload) => request(`/api/categories/${id}`, { method: 'PUT', body: payload }),
   deleteCategory: (id) => request(`/api/categories/${id}`, { method: 'DELETE' }),
 
   // products
   getProducts: (category) => request(`/api/products${category ? `?category=${category}` : ''}`, { auth: false }),
+  getAllProductsAdmin: () => request('/api/products/admin/all'),
   getProduct: (id) => request(`/api/products/${id}`, { auth: false }),
   createProduct: (payload) => request('/api/products', { method: 'POST', body: payload }),
   updateProduct: (id, payload) => request(`/api/products/${id}`, { method: 'PUT', body: payload }),

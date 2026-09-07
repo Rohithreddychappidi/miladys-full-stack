@@ -9,6 +9,11 @@ import { formatINR } from '../data/store';
 
 const emptyAddress = { name: '', mobile: '', line1: '', city: '', state: '', pincode: '' };
 
+// Must match SHIPPING_FEE in server/src/routes/orders.js — this value is
+// only for what's displayed before payment; the actual charge always
+// comes from the server's own order-creation response, never from this.
+const SHIPPING_FEE = 100;
+
 function loadRazorpayScript() {
   return new Promise((resolve, reject) => {
     if (window.Razorpay) return resolve();
@@ -38,7 +43,7 @@ export default function Checkout() {
   const navigate = useNavigate();
 
   const discount = coupon?.discount || 0;
-  const total = Math.max(subtotal - discount, 0);
+  const total = Math.max(subtotal - discount, 0) + SHIPPING_FEE;
 
   async function handleApplyCoupon() {
     if (!couponInput.trim()) return;
@@ -294,7 +299,7 @@ export default function Checkout() {
             {discount > 0 && (
               <div className="summary-row discount-row"><span>Coupon discount</span><span>−{formatINR(discount)}</span></div>
             )}
-            <div className="summary-row"><span>Shipping</span><span>Free</span></div>
+            <div className="summary-row"><span>Shipping</span><span>{formatINR(SHIPPING_FEE)}</span></div>
             <div className="summary-row total"><span>Total</span><span>{formatINR(total)}</span></div>
             {error && <p className="checkout-error">{error}</p>}
             <button

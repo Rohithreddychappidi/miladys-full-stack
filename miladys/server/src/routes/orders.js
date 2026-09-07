@@ -9,6 +9,11 @@ import { findApplicableTier } from './cancellationPolicy.js';
 
 const router = Router();
 
+// Flat shipping fee on every order. Not configurable via CMS yet — a
+// single constant here (used both when creating the Razorpay order and
+// when rendering the invoice) so it can't drift between the two.
+const SHIPPING_FEE = 100;
+
 // POST /api/orders/create
 // Body: { items: [{ productId, qty }], address: {name, mobile, line1, city, state, pincode} }
 // Prices are looked up from the DB — never trust a price sent by the client.
@@ -23,7 +28,7 @@ router.post('/create', requireAuth, async (req, res) => {
   }
 
   const productIds = items.map((i) => i.productId);
-  const { rows: products } = await query('SELECT * FROM products WHERE id = ANY($1)', [productIds]);
+  const { rows: products } = await query('SELECT * FROM products WHERE id = ANY($1) AND active = true', [productIds]);
   const byId = Object.fromEntries(products.map((p) => [p.id, p]));
 
   let subtotal = 0;
@@ -50,15 +55,15 @@ router.post('/create', requireAuth, async (req, res) => {
     }
     discount = computeDiscount(coupon, subtotal);
   }
-  const total = subtotal - discount;
+  const total = subtotal - discount + SHIPPING_FEE;
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const orderInsert = await client.query(
-      `INSERT INTO orders (user_id, status, subtotal, coupon_id, coupon_code, discount, address_name, address_mobile, address_line1, address_city, address_state, address_pincode)
-       VALUES ($1,'created',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-      [req.user.id, subtotal, coupon?.id || null, coupon?.code || null, discount, address.name, address.mobile, address.line1, address.city, address.state || '', address.pincode]
+      `INSERT INTO orders (user_id, status, subtotal, shipping_fee, coupon_id, coupon_code, discount, address_name, address_mobile, address_line1, address_city, address_state, address_pincode)
+       VALUES ($1,'created',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      [req.user.id, subtotal, SHIPPING_FEE, coupon?.id || null, coupon?.code || null, discount, address.name, address.mobile, address.line1, address.city, address.state || '', address.pincode]
     );
     const order = orderInsert.rows[0];
 
@@ -88,6 +93,7 @@ router.post('/create', requireAuth, async (req, res) => {
       currency: rpOrder.currency,
       keyId: process.env.RAZORPAY_KEY_ID,
       discount,
+      shippingFee: SHIPPING_FEE,
     });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -197,6 +203,9 @@ router.post('/:id/cancel', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'This order is past the cancellation window and can no longer be cancelled here — please contact support.' });
   }
 
+  // Refund is based on merchandise value only — shipping isn't refunded on
+  // a self-service cancellation, matching common practice (the order was
+  // already picked/shipped, or shipping was already incurred).
   const payable = order.subtotal - (order.discount || 0);
   const refundAmount = Math.round((payable * tier.refund_percent) / 100);
 

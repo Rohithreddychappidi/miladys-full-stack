@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
 import RecommendedProducts from '../components/RecommendedProducts';
 import Seo from '../components/Seo';
@@ -14,13 +14,18 @@ const sortOptions = [
 ];
 
 export default function Products() {
+  const location = useLocation();
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [searchParams, setSearchParams] = useSearchParams();
   const activeCategory = searchParams.get('category') || 'all';
   const searchTerm = searchParams.get('search') || '';
   const [sort, setSort] = useState('popular');
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Arriving here via "Explore" on the Our Collections rail opens straight
+  // to the category list (the same sidebar panel the mobile "Filter
+  // Sarees" button opens) instead of dropping straight into the mixed
+  // all-products grid — same panel, just already open on arrival.
+  const [filtersOpen, setFiltersOpen] = useState(!!location.state?.openFilters);
 
   useEffect(() => {
     api.getCategories().then(({ categories }) => setCategories(categories)).catch(() => setCategories(getCategories()));

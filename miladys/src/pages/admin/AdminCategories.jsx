@@ -16,7 +16,9 @@ export default function AdminCategories() {
   }, []);
 
   function refresh() {
-    api.getCategories().then(({ categories }) => setCategories(categories)).catch((err) => setError(err.message));
+    // The admin list needs to see hidden categories too (to unhide them),
+    // unlike the public storefront endpoint used everywhere else.
+    api.getAllCategoriesAdmin().then(({ categories }) => setCategories(categories)).catch((err) => setError(err.message));
   }
 
   function handleImage(e) {
@@ -67,6 +69,25 @@ export default function AdminCategories() {
       refresh();
     } catch (err) {
       setError(err.message);
+    }
+  }
+
+  // Hide/show — an alternative to deleting when a category just shouldn't
+  // be on the live site right now. Hidden categories disappear from the
+  // storefront (home page rail, "Shop by Category", and the products
+  // filter list) but stay fully visible and editable here — the products
+  // inside it are unaffected and keep showing wherever they'd normally
+  // show (e.g. "All Sarees"), just without this category's own filter tab.
+  const [togglingId, setTogglingId] = useState(null);
+  async function handleToggleActive(category) {
+    setTogglingId(category.id);
+    try {
+      await api.updateCategory(category.id, { active: !category.active });
+      refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -128,14 +149,18 @@ export default function AdminCategories() {
         <div className="cms-list">
           {categories.length === 0 && <p className="empty">No categories yet.</p>}
           {categories.map((c) => (
-            <div className="cms-row" key={c.id}>
+            <div className={`cms-row ${c.active === false ? 'is-hidden' : ''}`} key={c.id}>
               <img src={c.image} alt="" className="row-thumb" />
               <div className="row-info">
                 <strong>{c.name}</strong>
                 <span>{c.tagline}</span>
               </div>
+              {c.active === false && <span className="hidden-badge">Hidden</span>}
               <div className="row-actions">
                 <button onClick={() => handleEdit(c)}>Edit</button>
+                <button onClick={() => handleToggleActive(c)} disabled={togglingId === c.id}>
+                  {c.active === false ? 'Show' : 'Hide'}
+                </button>
                 <button onClick={() => handleDelete(c.id)} className="danger">Delete</button>
               </div>
             </div>
@@ -193,6 +218,18 @@ export default function AdminCategories() {
         .row-actions { display: flex; gap: 10px; }
         .row-actions button { background: none; border: none; font-size: 12.5px; color: var(--maroon-900); }
         .row-actions .danger { color: #a13a3a; }
+        .cms-row.is-hidden { opacity: 0.55; }
+        .hidden-badge {
+          font-size: 10.5px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          color: var(--ink-400);
+          background: var(--stone-100);
+          border-radius: 999px;
+          padding: 3px 9px;
+          flex: 0 0 auto;
+        }
         .empty { color: var(--ink-400); font-size: 13.5px; }
         @media (max-width: 900px) {
           .cms-layout { grid-template-columns: 1fr; }

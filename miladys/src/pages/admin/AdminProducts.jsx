@@ -3,7 +3,7 @@ import { api } from '../../data/api';
 import { formatINR } from '../../data/store';
 import { compressImageFile } from '../../utils/compressImage';
 
-const emptyForm = { name: '', category: '', price: '', mrp: '', discountPercent: '', stock: '', description: '', image: '', images: [] };
+const emptyForm = { name: '', category: '', price: '', mrp: '', discountPercent: '', stock: '', description: '', image: '', images: [], active: true };
 
 // Keeps MRP / discount % / price in sync with each other, whichever one the
 // admin actually typed into. Rounds to whole rupees since that's what the
@@ -52,7 +52,9 @@ export default function AdminProducts() {
   }, []);
 
   function refresh() {
-    api.getProducts().then(({ products }) => setProducts(products)).catch((err) => setError(err.message));
+    // The admin list needs to see hidden products too (to unhide them),
+    // unlike the public storefront endpoint used everywhere else.
+    api.getAllProductsAdmin().then(({ products }) => setProducts(products)).catch((err) => setError(err.message));
   }
 
   function handleImage(e) {
@@ -127,6 +129,7 @@ export default function AdminProducts() {
       description: form.description,
       image: form.image || 'https://images.unsplash.com/photo-1717585679395-bbe39b5fb6bc?auto=format&fit=crop&w=800&q=80',
       images: form.images || [],
+      active: form.active !== false,
     };
 
     try {
@@ -142,7 +145,15 @@ export default function AdminProducts() {
     }
   }
 
-  function handleEdit(product) {
+  // The product list is deliberately fetched without gallery images (see
+  // the comment in server/src/routes/products.js) to keep the collection
+  // page fast, so `product.images` here is always empty even for products
+  // that do have a gallery. Fill the form from the list immediately for a
+  // snappy feel, then fetch the single full product (which does include
+  // the gallery) and patch that in — otherwise saving after editing even
+  // an unrelated field like price would submit `images: []` and silently
+  // wipe out the product's existing gallery photos.
+  async function handleEdit(product) {
     setForm({
       name: product.name,
       category: product.category,
@@ -152,10 +163,17 @@ export default function AdminProducts() {
       stock: product.stock,
       description: product.description,
       image: product.image,
-      images: product.images || [],
+      images: [],
+      active: product.active,
     });
     setEditingId(product.id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    try {
+      const { product: full } = await api.getProduct(product.id);
+      setForm((f) => (f.images.length ? f : { ...f, images: full.images || [] }));
+    } catch {
+      /* list data already populated the rest of the form; gallery just stays empty to edit */
+    }
   }
 
   async function handleDelete(id) {
@@ -177,6 +195,23 @@ export default function AdminProducts() {
     setMovingId(product.id);
     try {
       await api.updateProduct(product.id, { category: newCategoryId });
+      refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setMovingId(null);
+    }
+  }
+
+  // Hide/show — an alternative to deleting when a product just shouldn't
+  // be on the live site right now (out of season, temporarily unavailable,
+  // etc). Hidden products disappear from the storefront (listing, search,
+  // category pages, and direct links) but stay fully visible and editable
+  // here, and keep their order/review history intact.
+  async function handleToggleActive(product) {
+    setMovingId(product.id);
+    try {
+      await api.updateProduct(product.id, { active: !product.active });
       refresh();
     } catch (err) {
       setError(err.message);
@@ -356,7 +391,7 @@ export default function AdminProducts() {
             const hasDiscount = p.mrp > p.price;
             const discountPct = hasDiscount ? Math.round(((p.mrp - p.price) / p.mrp) * 100) : 0;
             return (
-              <div className="cms-row" key={p.id}>
+              <div className={`cms-row ${p.active === false ? 'is-hidden' : ''}`} key={p.id}>
                 <img src={p.image} alt="" className="row-thumb-sq" />
                 <div className="row-info">
                   <strong>{p.name}</strong>
@@ -371,6 +406,7 @@ export default function AdminProducts() {
                     )}
                   </span>
                 </div>
+                {p.active === false && <span className="hidden-badge">Hidden</span>}
                 <span className={`stock-badge ${stockTone(p.stock)}`}>{stockLabel(p.stock)}</span>
                 <div className="row-actions">
                   <select
@@ -386,6 +422,9 @@ export default function AdminProducts() {
                     ))}
                   </select>
                   <button onClick={() => handleEdit(p)}>Edit</button>
+                  <button onClick={() => handleToggleActive(p)} disabled={movingId === p.id}>
+                    {p.active === false ? 'Show' : 'Hide'}
+                  </button>
                   <button onClick={() => handleDelete(p.id)} className="danger">Delete</button>
                 </div>
               </div>
@@ -533,6 +572,18 @@ export default function AdminProducts() {
         .row-actions { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
         .row-actions button { background: none; border: none; font-size: 12.5px; color: var(--maroon-900); }
         .row-actions .danger { color: #a13a3a; }
+        .cms-row.is-hidden { opacity: 0.55; }
+        .hidden-badge {
+          font-size: 10.5px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          color: var(--ink-400);
+          background: var(--stone-100);
+          border-radius: 999px;
+          padding: 3px 9px;
+          flex: 0 0 auto;
+        }
         .row-move-select {
           font-size: 11.5px;
           padding: 6px 8px;

@@ -112,11 +112,12 @@ export function renderInvoice(res, { order, items, customer }) {
   rowY += 14;
 
   // ---------- Totals ----------
-  const payable = (order.subtotal || 0) - (order.discount || 0);
+  const payable = (order.subtotal || 0) - (order.discount || 0) + (order.shipping_fee || 0);
   const totalsRows = [['Subtotal', formatINR(order.subtotal)]];
   if (order.discount) {
     totalsRows.push([`Discount${order.coupon_code ? ` (${order.coupon_code})` : ''}`, `-${formatINR(order.discount)}`]);
   }
+  totalsRows.push(['Shipping', order.shipping_fee ? formatINR(order.shipping_fee) : 'Free']);
   if (order.status === 'cancelled' && order.refund_amount) {
     totalsRows.push([`Refunded (${order.refund_percent}%)`, `-${formatINR(order.refund_amount)}`]);
   }

@@ -5,6 +5,14 @@ import { requireAdmin } from '../middleware/auth.js';
 const router = Router();
 
 router.get('/', async (_req, res) => {
+  const { rows } = await query('SELECT * FROM categories WHERE active = true ORDER BY sort_order ASC, created_at ASC');
+  res.json({ categories: rows });
+});
+
+// GET /api/categories/admin/all — every category regardless of active
+// status, for the admin panel (which needs to see hidden ones to unhide
+// them).
+router.get('/admin/all', requireAdmin, async (_req, res) => {
   const { rows } = await query('SELECT * FROM categories ORDER BY sort_order ASC, created_at ASC');
   res.json({ categories: rows });
 });
@@ -21,12 +29,13 @@ router.post('/', requireAdmin, async (req, res) => {
 });
 
 router.put('/:id', requireAdmin, async (req, res) => {
-  const { name, image, tagline, sortOrder } = req.body || {};
+  const { name, image, tagline, sortOrder, active } = req.body || {};
   const { rows } = await query(
     `UPDATE categories SET name = COALESCE($1,name), image = COALESCE($2,image),
-       tagline = COALESCE($3,tagline), sort_order = COALESCE($4,sort_order)
-     WHERE id = $5 RETURNING *`,
-    [name, image, tagline, sortOrder, req.params.id]
+       tagline = COALESCE($3,tagline), sort_order = COALESCE($4,sort_order),
+       active = COALESCE($5,active)
+     WHERE id = $6 RETURNING *`,
+    [name, image, tagline, sortOrder, active, req.params.id]
   );
   if (!rows[0]) return res.status(404).json({ error: 'Category not found.' });
   res.json({ category: rows[0] });

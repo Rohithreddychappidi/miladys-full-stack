@@ -132,7 +132,7 @@ export default function Orders() {
                       Shipping to {o.address_line1}, {o.address_city} — {o.address_pincode}
                     </div>
                     <div className="order-total">
-                      Total <strong>{formatINR(o.subtotal - (o.discount || 0))}</strong>
+                      Total <strong>{formatINR(o.subtotal - (o.discount || 0) + (o.shipping_fee || 0))}</strong>
                       {o.razorpay_payment_id && <span className="payment-id">Payment ID: {o.razorpay_payment_id}</span>}
                     </div>
                   </div>

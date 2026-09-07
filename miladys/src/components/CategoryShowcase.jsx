@@ -18,11 +18,24 @@ export default function CategoryShowcase({ categories, note, heading }) {
   const scrollRafRef = useRef(null);
   const settleTimerRef = useRef(null);
   const setWidthRef = useRef(0);
+  // "Mobile" here really means "no hover/cursor" — the desktop rail is
+  // driven entirely by mouse position, which iPads (and other touch
+  // tablets) don't have even at 1024px wide. Checking only pixel width
+  // put iPad into the desktop hover-driven mode, where nothing responds
+  // to touch at all — this is what made the rail feel unscrollable on
+  // iPad. Matching the actual hover/pointer capability (not just a width
+  // breakpoint) catches any touch-only device regardless of screen size.
+  function computeIsMobile() {
+    if (typeof window === 'undefined') return false;
+    const narrow = window.innerWidth <= MOBILE_BREAKPOINT;
+    const noHover = typeof window.matchMedia === 'function'
+      && window.matchMedia('(hover: none), (pointer: coarse)').matches;
+    return narrow || noHover;
+  }
+
   const [renderPos, setRenderPos] = useState(0);
   const [focusIndex, setFocusIndex] = useState(0);
-  const [isMobile, setIsMobile] = useState(
-    typeof window !== 'undefined' ? window.innerWidth <= MOBILE_BREAKPOINT : false,
-  );
+  const [isMobile, setIsMobile] = useState(computeIsMobile());
   const count = categories.length;
 
   // On mobile, the strip is a seamless loop: the real category list is
@@ -39,7 +52,7 @@ export default function CategoryShowcase({ categories, note, heading }) {
   // instead of the animated carousel — no continuous drift to fight with.
   useEffect(() => {
     function handleResize() {
-      setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+      setIsMobile(computeIsMobile());
     }
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -253,7 +266,7 @@ export default function CategoryShowcase({ categories, note, heading }) {
         </div>
       )}
 
-      <Link to="/products" className="showcase-explore">
+      <Link to="/products" state={{ openFilters: true }} className="showcase-explore">
         Explore
         <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <path d="M8 4l6 6-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />

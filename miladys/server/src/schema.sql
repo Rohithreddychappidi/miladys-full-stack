@@ -66,6 +66,11 @@ CREATE TABLE IF NOT EXISTS products (
 -- Safe on every boot: adds the column for databases created before the
 -- gallery feature existed. No-op once it's there.
 ALTER TABLE products ADD COLUMN IF NOT EXISTS images JSONB NOT NULL DEFAULT '[]'::jsonb;
+-- Lets the admin hide a product from the storefront without deleting it
+-- (and losing its order history / reviews link) — hidden products stay
+-- fully visible and editable in the admin panel.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE categories ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
 
 -- Home page CMS — every section on the home screen is a row here, keyed by
 -- a stable `section_key` (e.g. 'hero', 'promo_banner', 'featured_categories').
@@ -134,6 +139,7 @@ CREATE TABLE IF NOT EXISTS orders (
   razorpay_payment_id TEXT,
   status             TEXT NOT NULL DEFAULT 'created', -- created | paid | failed | paid_oversold | cancelled
   subtotal           INTEGER NOT NULL,
+  shipping_fee       INTEGER NOT NULL DEFAULT 0,
   coupon_id          INTEGER REFERENCES coupons(id) ON DELETE SET NULL,
   coupon_code        TEXT,
   discount           INTEGER NOT NULL DEFAULT 0,
@@ -158,6 +164,7 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS refund_percent INTEGER;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS refund_amount INTEGER;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_fee INTEGER NOT NULL DEFAULT 0;
 
 -- Cancellation policy — fully admin-editable tiers, e.g. "within 1 day,
 -- 100% refund" / "within 3 days, 50% refund". max_days is the cutoff (in

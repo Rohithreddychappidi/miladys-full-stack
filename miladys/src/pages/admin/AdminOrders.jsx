@@ -107,7 +107,7 @@ export default function AdminOrders() {
               <div className="order-row-foot">
                 <span>{new Date(o.created_at).toLocaleString('en-IN')}</span>
                 {o.discount > 0 && <span>Subtotal {formatINR(o.subtotal)}</span>}
-                <strong>{formatINR(o.subtotal - (o.discount || 0))}</strong>
+                <strong>{formatINR(o.subtotal - (o.discount || 0) + (o.shipping_fee || 0))}</strong>
               </div>
 
               {o.paid_at && (
