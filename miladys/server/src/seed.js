@@ -69,6 +69,12 @@ const homeSections = [
     // random pick from the catalog each time.
     productIds: [],
   } },
+  { key: 'shipping_settings', title: 'Shipping', sort: 5, content: {
+    fee: 100,
+    // 0 = free-shipping tier turned off; otherwise orders at or above
+    // this subtotal get free shipping instead of the flat fee above.
+    freeThreshold: 0,
+  } },
   { key: 'story', title: 'Our Craft', sort: 6, content: {
     eyebrow: 'Our craft',
     heading: 'Woven by hand, worn with intention',

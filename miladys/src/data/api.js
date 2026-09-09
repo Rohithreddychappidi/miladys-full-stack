@@ -69,6 +69,7 @@ export const api = {
   // auth
   signup: (payload) => request('/api/auth/signup', { method: 'POST', body: payload, auth: false }),
   login: (payload) => request('/api/auth/login', { method: 'POST', body: payload, auth: false }),
+  googleLogin: (payload) => request('/api/auth/google', { method: 'POST', body: payload, auth: false }),
   forgotPassword: (payload) => request('/api/auth/forgot-password', { method: 'POST', body: payload, auth: false }),
   resetPassword: (payload) => request('/api/auth/reset-password', { method: 'POST', body: payload, auth: false }),
   me: () => request('/api/auth/me'),

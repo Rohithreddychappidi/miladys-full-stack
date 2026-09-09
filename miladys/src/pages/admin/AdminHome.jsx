@@ -9,6 +9,7 @@ const sectionLabels = {
   promo_banner: 'Promo Banner',
   featured: 'Featured Sarees',
   recommended: 'Recommended Sarees',
+  shipping_settings: 'Shipping',
   story: 'Our Craft',
   testimonials: 'Testimonials Heading',
   social_links: 'Footer — Social & Contact Links',
@@ -44,6 +45,10 @@ const sectionFields = {
   ],
   recommended: [
     { key: 'heading', label: 'Heading', type: 'text' },
+  ],
+  shipping_settings: [
+    { key: 'fee', label: 'Standard shipping fee (₹)', type: 'number' },
+    { key: 'freeThreshold', label: 'Free shipping when order total is at least (₹) — set to 0 to turn off free shipping', type: 'number' },
   ],
   story: [
     { key: 'eyebrow', label: 'Small label above heading', type: 'text' },
@@ -304,6 +309,13 @@ export default function AdminHome() {
                       rows={3}
                       value={draft[f.key] || ''}
                       onChange={(e) => updateField(s.section_key, f.key, e.target.value)}
+                    />
+                  ) : f.type === 'number' ? (
+                    <input
+                      type="number"
+                      min="0"
+                      value={draft[f.key] ?? ''}
+                      onChange={(e) => updateField(s.section_key, f.key, e.target.value === '' ? '' : Number(e.target.value))}
                     />
                   ) : (
                     <input

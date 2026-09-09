@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import GoogleSignInButton from '../components/GoogleSignInButton';
 import Seo from '../components/Seo';
 
 export default function Login() {
@@ -8,7 +9,7 @@ export default function Login() {
   const [form, setForm] = useState({ name: '', email: '', password: '', mobile: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const { login, signup } = useAuth();
+  const { login, signup, googleLogin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   // If the person was sent here from a protected page (e.g. checkout),
@@ -28,6 +29,26 @@ export default function Login() {
         await signup(form);
       }
       navigate(redirectTo, { replace: true });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleGoogleCredential(credential) {
+    setError('');
+    setBusy(true);
+    try {
+      const { needsMobile } = await googleLogin(credential);
+      // A first-time Google sign-in has no mobile number on file yet
+      // (Google only ever gives us name + email) — collect it before
+      // sending them on to wherever they were headed.
+      if (needsMobile) {
+        navigate('/complete-profile', { replace: true, state: { from: redirectTo } });
+      } else {
+        navigate(redirectTo, { replace: true });
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -81,6 +102,9 @@ export default function Login() {
             </button>
           </form>
 
+          <div className="auth-divider"><span>or</span></div>
+          <GoogleSignInButton onCredential={handleGoogleCredential} onError={setError} />
+
           <Link to="/" className="back-link">← Back to home</Link>
         </div>
       </div>
@@ -111,6 +135,10 @@ export default function Login() {
         .auth-error { font-size: 12.5px; color: #a13a3a; margin: 0; }
         .forgot-link { align-self: flex-start; font-size: 12.5px; color: var(--gold-600); margin-top: -6px; }
         .auth-form .btn { margin-top: 6px; }
+        .auth-divider { display: flex; align-items: center; gap: 12px; margin: 22px 0 16px; font-size: 11.5px; color: var(--ink-400); text-transform: uppercase; letter-spacing: 0.06em; }
+        .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--stone-200); }
+        .google-signin-wrap { display: flex; justify-content: center; min-height: 40px; }
+        .google-signin-placeholder { width: 320px; max-width: 100%; height: 40px; border-radius: var(--radius-sm); background: var(--stone-100); }
         .back-link { display: inline-block; margin-top: 20px; font-size: 12.5px; color: var(--ink-400); }
       `}</style>
     </div>

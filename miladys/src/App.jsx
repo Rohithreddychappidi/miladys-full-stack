@@ -20,6 +20,7 @@ import Profile from './pages/Profile';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import CompleteProfile from './pages/CompleteProfile';
 import NotFound from './pages/NotFound';
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -53,6 +54,7 @@ function PublicSite() {
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/complete-profile" element={<RequireAuth><CompleteProfile /></RequireAuth>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

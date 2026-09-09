@@ -9,10 +9,10 @@ import { formatINR } from '../data/store';
 
 const emptyAddress = { name: '', mobile: '', line1: '', city: '', state: '', pincode: '' };
 
-// Must match SHIPPING_FEE in server/src/routes/orders.js — this value is
-// only for what's displayed before payment; the actual charge always
-// comes from the server's own order-creation response, never from this.
-const SHIPPING_FEE = 100;
+// Fallback only, used until the real settings load from the CMS (or if
+// that fetch fails) — the actual charge always comes from the server's
+// own order-creation response, never from this constant.
+const DEFAULT_SHIPPING = { fee: 100, freeThreshold: 0 };
 
 function loadRazorpayScript() {
   return new Promise((resolve, reject) => {
@@ -38,12 +38,16 @@ export default function Checkout() {
   const [error, setError] = useState('');
   const [couponInput, setCouponInput] = useState('');
   const [coupon, setCoupon] = useState(null); // { code, discount }
+  const [shippingSettings, setShippingSettings] = useState(DEFAULT_SHIPPING);
   const [couponError, setCouponError] = useState('');
   const [applyingCoupon, setApplyingCoupon] = useState(false);
   const navigate = useNavigate();
 
   const discount = coupon?.discount || 0;
-  const total = Math.max(subtotal - discount, 0) + SHIPPING_FEE;
+  const qualifiesForFreeShipping = shippingSettings.freeThreshold > 0 && subtotal >= shippingSettings.freeThreshold;
+  const shippingFee = qualifiesForFreeShipping ? 0 : shippingSettings.fee;
+  const amountToFreeShipping = shippingSettings.freeThreshold > 0 ? Math.max(shippingSettings.freeThreshold - subtotal, 0) : 0;
+  const total = Math.max(subtotal - discount, 0) + shippingFee;
 
   async function handleApplyCoupon() {
     if (!couponInput.trim()) return;
@@ -67,6 +71,17 @@ export default function Checkout() {
   }
 
   useEffect(() => {
+    api.getHomeSections().then(({ sections }) => {
+      const section = sections.find((s) => s.section_key === 'shipping_settings');
+      if (section?.content) {
+        const { fee, freeThreshold } = section.content;
+        setShippingSettings({
+          fee: Number.isFinite(fee) ? fee : DEFAULT_SHIPPING.fee,
+          freeThreshold: Number.isFinite(freeThreshold) ? freeThreshold : DEFAULT_SHIPPING.freeThreshold,
+        });
+      }
+    }).catch(() => {});
+
     api
       .getAddresses()
       .then(({ addresses }) => {
@@ -299,7 +314,12 @@ export default function Checkout() {
             {discount > 0 && (
               <div className="summary-row discount-row"><span>Coupon discount</span><span>−{formatINR(discount)}</span></div>
             )}
-            <div className="summary-row"><span>Shipping</span><span>{formatINR(SHIPPING_FEE)}</span></div>
+            <div className="summary-row"><span>Shipping</span><span>{shippingFee === 0 ? 'Free' : formatINR(shippingFee)}</span></div>
+            {amountToFreeShipping > 0 && (
+              <p className="free-shipping-nudge">
+                Add {formatINR(amountToFreeShipping)} more to get free shipping.
+              </p>
+            )}
             <div className="summary-row total"><span>Total</span><span>{formatINR(total)}</span></div>
             {error && <p className="checkout-error">{error}</p>}
             <button
@@ -417,6 +437,7 @@ export default function Checkout() {
         .discount-row span:last-child { color: #3c7a3c; font-weight: 600; }
 
         .summary-row { display: flex; justify-content: space-between; font-size: 13.5px; color: var(--ink-600); margin-bottom: 12px; }
+        .free-shipping-nudge { font-size: 11.5px; color: var(--gold-600); margin: -6px 0 12px; }
         .summary-row.total {
           font-size: 15px; font-weight: 600; color: var(--maroon-900);
           border-top: 1px solid var(--stone-200); padding-top: 14px; margin-top: 6px;

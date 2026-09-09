@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import { OAuth2Client } from 'google-auth-library';
 import { query } from '../db.js';
 import { signToken, requireAuth } from '../middleware/auth.js';
 import { sendLoginEmail, sendPasswordResetEmail } from '../lib/email.js';
@@ -12,6 +13,7 @@ const RESET_TOKEN_TTL_MS = 30 * 60 * 1000; // 30 minutes
 // comma-separated list of allowed CORS origins, so only the first is used
 // here (same approach already used for the other emailed links).
 const SITE_URL = (process.env.CLIENT_URL || 'http://localhost:5173').split(',')[0].trim();
+const googleClient = process.env.GOOGLE_CLIENT_ID ? new OAuth2Client(process.env.GOOGLE_CLIENT_ID) : null;
 
 router.post('/signup', async (req, res) => {
   const { name, email, password, mobile } = req.body || {};
@@ -57,6 +59,62 @@ router.post('/login', async (req, res) => {
   sendLoginEmail(user).catch(() => {});
 
   res.json({ token, user: publicUser(user) });
+});
+
+// Sign in (or sign up, on first use) with Google. The frontend uses Google
+// Identity Services to get an ID token directly in the browser — that
+// token is verified here against Google's own keys before we trust
+// anything in it, so a forged/tampered token is rejected before it ever
+// reaches a database query.
+router.post('/google', async (req, res) => {
+  if (!googleClient) {
+    return res.status(503).json({ error: 'Google sign-in is not configured yet.' });
+  }
+  const { credential } = req.body || {};
+  if (!credential) return res.status(400).json({ error: 'Missing Google credential.' });
+
+  let payload;
+  try {
+    const ticket = await googleClient.verifyIdToken({ idToken: credential, audience: process.env.GOOGLE_CLIENT_ID });
+    payload = ticket.getPayload();
+  } catch {
+    return res.status(401).json({ error: 'Could not verify Google sign-in. Please try again.' });
+  }
+  if (!payload?.email || !payload.email_verified) {
+    return res.status(401).json({ error: 'Your Google account email is not verified.' });
+  }
+
+  const normalizedEmail = payload.email.toLowerCase();
+  const { rows } = await query('SELECT * FROM users WHERE email = $1', [normalizedEmail]);
+  let user = rows[0];
+
+  if (!user) {
+    // New account via Google. There's no password to check yet — a
+    // random, never-shown hash keeps password_hash's NOT NULL constraint
+    // satisfied; the person can set a real password anytime afterward via
+    // "Forgot password", which works regardless of how the account started.
+    const randomPasswordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+    const isAdmin = normalizedEmail === ADMIN_EMAIL;
+    const insert = await query(
+      `INSERT INTO users (name, email, password_hash, google_id, is_admin)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [payload.name?.trim() || normalizedEmail.split('@')[0], normalizedEmail, randomPasswordHash, payload.sub, isAdmin]
+    );
+    user = insert.rows[0];
+  } else if (!user.google_id) {
+    // Existing email/password account signing in with Google for the
+    // first time — link it rather than creating a second account with
+    // the same email (email is already UNIQUE, so this is also the only
+    // safe option, not just the friendlier one).
+    const update = await query('UPDATE users SET google_id = $1 WHERE id = $2 RETURNING *', [payload.sub, user.id]);
+    user = update.rows[0];
+  }
+
+  const token = signToken(user);
+  // Google only ever gives us name + email — mobile is required at
+  // checkout, so the frontend uses this flag to prompt for it right after
+  // a first-time Google sign-in instead of waiting until checkout to ask.
+  res.json({ token, user: publicUser(user), needsMobile: !user.mobile });
 });
 
 // Always responds the same way whether or not the email is registered —

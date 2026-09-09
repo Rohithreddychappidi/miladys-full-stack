@@ -9,10 +9,17 @@ import { findApplicableTier } from './cancellationPolicy.js';
 
 const router = Router();
 
-// Flat shipping fee on every order. Not configurable via CMS yet — a
-// single constant here (used both when creating the Razorpay order and
-// when rendering the invoice) so it can't drift between the two.
-const SHIPPING_FEE = 100;
+// Reads the admin-configurable shipping fee / free-shipping threshold from
+// the "shipping_settings" CMS section (edited in /admin/home). Falls back
+// to a flat ₹100 if that section is ever missing, so checkout never
+// breaks even before the row exists in an older database.
+async function getShippingSettings() {
+  const { rows } = await query(`SELECT content FROM home_sections WHERE section_key = 'shipping_settings'`);
+  const content = rows[0]?.content || {};
+  const fee = Number.isFinite(content.fee) ? content.fee : 100;
+  const freeThreshold = Number.isFinite(content.freeThreshold) ? content.freeThreshold : 0;
+  return { fee, freeThreshold };
+}
 
 // POST /api/orders/create
 // Body: { items: [{ productId, qty }], address: {name, mobile, line1, city, state, pincode} }
@@ -55,7 +62,12 @@ router.post('/create', requireAuth, async (req, res) => {
     }
     discount = computeDiscount(coupon, subtotal);
   }
-  const total = subtotal - discount + SHIPPING_FEE;
+  // Free-shipping threshold is checked against the raw subtotal (before
+  // any coupon discount) — so a discount code can't also unintentionally
+  // unlock free shipping.
+  const { fee, freeThreshold } = await getShippingSettings();
+  const shippingFee = freeThreshold > 0 && subtotal >= freeThreshold ? 0 : fee;
+  const total = subtotal - discount + shippingFee;
 
   const client = await pool.connect();
   try {
@@ -63,7 +75,7 @@ router.post('/create', requireAuth, async (req, res) => {
     const orderInsert = await client.query(
       `INSERT INTO orders (user_id, status, subtotal, shipping_fee, coupon_id, coupon_code, discount, address_name, address_mobile, address_line1, address_city, address_state, address_pincode)
        VALUES ($1,'created',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-      [req.user.id, subtotal, SHIPPING_FEE, coupon?.id || null, coupon?.code || null, discount, address.name, address.mobile, address.line1, address.city, address.state || '', address.pincode]
+      [req.user.id, subtotal, shippingFee, coupon?.id || null, coupon?.code || null, discount, address.name, address.mobile, address.line1, address.city, address.state || '', address.pincode]
     );
     const order = orderInsert.rows[0];
 
@@ -93,7 +105,7 @@ router.post('/create', requireAuth, async (req, res) => {
       currency: rpOrder.currency,
       keyId: process.env.RAZORPAY_KEY_ID,
       discount,
-      shippingFee: SHIPPING_FEE,
+      shippingFee,
     });
   } catch (err) {
     await client.query('ROLLBACK');

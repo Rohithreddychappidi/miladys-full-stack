@@ -11,6 +11,12 @@ CREATE TABLE IF NOT EXISTS users (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Set only for accounts that have signed in with Google at least once
+-- (either created via Google, or an existing email/password account that
+-- later linked Google sign-in). Lookup for login is always by email
+-- either way — this is just a record of the link, not used to authenticate.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id TEXT;
+
 -- Forgot-password flow. We store a hash of the reset token (never the raw
 -- token itself — same reasoning as password_hash on users), so a leaked DB
 -- alone can't be used to reset anyone's account. The raw token only ever
