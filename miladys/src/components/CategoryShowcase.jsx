@@ -362,7 +362,14 @@ export default function CategoryShowcase({ categories, note, heading }) {
           transform: translateY(-18px) scale(1.045);
           box-shadow: 0 32px 54px rgba(72,24,30,0.4);
         }
-        .showcase-card img {
+        /* Both the desktop rail and the mobile strip wrap their image in
+           this same inner div, so one rule covers both — this used to be
+           scoped only to the desktop card's own outer class, which meant
+           the mobile strip's images never got object-fit: cover at all
+           and just rendered at their natural size instead of filling/
+           cropping to the card, which is what looked "not zoomed in" on
+           mobile. */
+        .showcase-card-lift img {
           width: 100%;
           height: 100%;
           object-fit: cover;
