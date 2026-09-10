@@ -386,6 +386,18 @@ export default function CategoryShowcase({ categories, note, heading }) {
           text-transform: uppercase;
           text-align: left;
         }
+        /* On the mobile strip, a peeking (non-centered) card is only ever
+           partially inside the visible area by design — that's the visual
+           cue that there's more to scroll to. But the name label spans the
+           card's full width, so on a half-visible card its text gets cut
+           off mid-word (e.g. "KANJEEVARAM" showing as just "...EVARAM"),
+           which reads as broken rather than intentional. Showing the name
+           only on the centered card keeps the peek effect but drops the
+           part that looked like a rendering glitch. */
+        .showcase-scroll-card:not(.is-focus) .showcase-card-name {
+          opacity: 0;
+          transition: opacity 0.3s ease;
+        }
 
         .showcase-scroll {
           display: flex;
