@@ -23,6 +23,14 @@ function priceFromDiscount(mrp, discountPercent) {
   return Math.max(0, Math.round(m * (1 - pct / 100)));
 }
 
+function mrpFromDiscount(price, discountPercent) {
+  const p = Number(price);
+  if (!p || discountPercent === '' || discountPercent === null || discountPercent === undefined) return '';
+  const pct = Number(discountPercent);
+  if (Number.isNaN(pct) || pct >= 100) return '';
+  return Math.round(p / (1 - pct / 100));
+}
+
 function stockTone(stock) {
   if (stock === 0) return 'stock-out';
   if (stock <= 5) return 'stock-low';
@@ -86,33 +94,53 @@ export default function AdminProducts() {
     if (fileInput.current) fileInput.current.value = '';
   }
 
-  // MRP changes: if a discount % is already set, recompute the price from
-  // it. Otherwise leave price alone — the admin may still be typing.
+  // Any two of MRP / Discount % / Price can be filled in, in any order,
+  // and the third fills itself in — whichever field the admin is NOT
+  // currently typing into gets recomputed from the other two, as long as
+  // at least one of those other two already has a value. MRP is treated
+  // as the "anchor" when present (matches how the site displays pricing —
+  // MRP struck through next to Price), so filling MRP + Discount % always
+  // drives Price; only when MRP is the one still empty does filling
+  // Price + Discount % drive MRP instead.
+
   function handleMrpChange(value) {
     setForm((f) => {
       const next = { ...f, mrp: value };
       if (f.discountPercent !== '') {
         const price = priceFromDiscount(value, f.discountPercent);
         if (price !== '') next.price = price;
+      } else if (f.price !== '') {
+        next.discountPercent = discountFromPrices(value, f.price);
       }
       return next;
     });
   }
 
-  // Discount % changes: always recompute price from MRP + this percentage.
   function handleDiscountChange(value) {
     setForm((f) => {
       const next = { ...f, discountPercent: value };
-      const price = priceFromDiscount(f.mrp, value);
-      if (price !== '') next.price = price;
+      if (f.mrp !== '') {
+        const price = priceFromDiscount(f.mrp, value);
+        if (price !== '') next.price = price;
+      } else if (f.price !== '') {
+        const mrp = mrpFromDiscount(f.price, value);
+        if (mrp !== '') next.mrp = mrp;
+      }
       return next;
     });
   }
 
-  // Price typed directly (overriding the auto-calculated one): recompute
-  // the discount % to match, so the two never fall out of sync.
   function handlePriceChange(value) {
-    setForm((f) => ({ ...f, price: value, discountPercent: discountFromPrices(f.mrp, value) }));
+    setForm((f) => {
+      const next = { ...f, price: value };
+      if (f.mrp !== '') {
+        next.discountPercent = discountFromPrices(f.mrp, value);
+      } else if (f.discountPercent !== '') {
+        const mrp = mrpFromDiscount(value, f.discountPercent);
+        if (mrp !== '') next.mrp = mrp;
+      }
+      return next;
+    });
   }
 
   async function handleSubmit(e) {
@@ -304,6 +332,7 @@ export default function AdminProducts() {
 
           <div className="form-section">
             <p className="section-label">Pricing &amp; inventory</p>
+            <p className="field-hint pricing-hint">Fill in any two of MRP, Discount %, and Price — the third fills itself in.</p>
             <div className="form-row">
               <label>
                 MRP (₹)
@@ -312,14 +341,12 @@ export default function AdminProducts() {
               <label>
                 Discount %
                 <input type="number" min="0" max="99" value={form.discountPercent} placeholder="e.g. 20" onChange={(e) => handleDiscountChange(e.target.value)} />
-                <span className="field-hint">Fills in the price below automatically.</span>
               </label>
             </div>
 
             <label>
               Price (₹) <span className="required-mark">*</span>
               <input type="number" min="0" value={form.price} onChange={(e) => handlePriceChange(e.target.value)} required />
-              <span className="field-hint">Auto-calculated from MRP and discount % — edit directly to override.</span>
             </label>
 
             <label>
@@ -478,6 +505,7 @@ export default function AdminProducts() {
         }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .field-hint { font-size: 11.5px; color: var(--ink-400); line-height: 1.6; }
+        .pricing-hint { margin: -4px 0 12px; }
 
         .category-picker { display: flex; gap: 14px; align-items: flex-start; }
         .category-picker > label { flex: 1; min-width: 0; }
