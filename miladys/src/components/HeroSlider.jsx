@@ -28,7 +28,14 @@ export default function HeroSlider({ slides: cmsSlides, mobileSlides: cmsMobileS
 
   const slides =
     Array.isArray(activeCmsSlides) && activeCmsSlides.length
-      ? activeCmsSlides.map((s, i) => ({ id: i, type: s.type, src: s.url, alt: 'Milady\'s' }))
+      // The key has to include the source URL, not just the index. A
+      // <video> element whose src *attribute* changes does NOT reload —
+      // it keeps playing the already-buffered clip until .load() is
+      // called. Keying by index alone meant React reused the same <video>
+      // DOM node after an admin uploaded a replacement, so the OLD video
+      // kept playing for its full duration before the new one appeared.
+      // Including the src makes React mount a fresh element instead.
+      ? activeCmsSlides.map((s, i) => ({ id: `${i}-${s.url}`, type: s.type, src: s.url, alt: 'Milady\'s' }))
       : defaultSlides;
 
   return isMobile
@@ -53,6 +60,11 @@ function DesktopHeroSlider({ slides }) {
     if (slides[active]?.type === 'video') {
       const vid = videoRef.current;
       if (vid) {
+        // load() forces the element to pick up the current src rather than
+        // continuing with whatever it already buffered — without it, a
+        // reused <video> node keeps playing the previous clip (see the
+        // keying comment above).
+        vid.load();
         vid.currentTime = 0;
         vid.play().catch(() => {});
       }
