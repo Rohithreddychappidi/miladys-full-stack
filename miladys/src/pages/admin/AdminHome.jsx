@@ -111,18 +111,29 @@ function readFileAsDataUrl(file) {
         These play in order on the home page banner. Mix photos and short video clips (a few seconds, no sound needed — it plays muted).
         Large videos make the page slow to load, so keep clips short and compressed.
       </p>
+      {slides.length > 1 && (
+        <p className="field-hint slides-order-note">
+          There are <strong>{slides.length} slides</strong> below — they play one after another in this order.
+          Uploading <em>adds</em> a new slide rather than replacing an existing one, so remove any you no longer
+          want with the <strong>×</strong> button.
+        </p>
+      )}
 
       {slides.length > 0 && (
         <div className="slides-grid">
           {slides.map((s, i) => (
-            <div className="slide-thumb" key={i}>
+            // Keyed by source, not index — a <video> whose src attribute
+            // changes doesn't reload, so index keys made the thumbnails
+            // show the wrong (previous) clip after removing a slide.
+            <div className="slide-thumb" key={`${i}-${s.url?.slice(-32)}`}>
               {s.type === 'video' ? (
                 <video src={s.url} muted playsInline />
               ) : (
                 <img src={s.url} alt="" />
               )}
+              <span className="slide-order-badge">{i + 1}</span>
               <span className="slide-type-badge">{s.type}</span>
-              <button type="button" className="slide-remove" onClick={() => removeSlide(i)} aria-label="Remove slide">×</button>
+              <button type="button" className="slide-remove" onClick={() => removeSlide(i)} aria-label={`Remove slide ${i + 1}`}>×</button>
             </div>
           ))}
         </div>
@@ -487,6 +498,23 @@ export default function AdminHome() {
           background: var(--stone-100);
         }
         .slide-thumb img, .slide-thumb video { width: 100%; height: 100%; object-fit: cover; }
+        .slide-order-badge {
+          position: absolute;
+          left: 4px;
+          top: 4px;
+          background: var(--maroon-900);
+          color: #fff;
+          font-size: 9.5px;
+          font-weight: 600;
+          min-width: 16px;
+          height: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          padding: 0 4px;
+        }
+        .slides-order-note { background: var(--stone-100); border-radius: var(--radius-sm); padding: 8px 10px; }
         .slide-type-badge {
           position: absolute;
           left: 4px;
