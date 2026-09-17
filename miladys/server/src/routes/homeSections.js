@@ -14,9 +14,30 @@ router.get('/', async (_req, res) => {
 });
 
 // Admin: every section including disabled ones, so the CMS can toggle them.
+// Must be registered BEFORE the public GET /:key below — Express matches
+// routes in registration order, and /:key matches any single path segment
+// including literally "all", which would otherwise shadow this admin
+// route entirely.
 router.get('/all', requireAdmin, async (_req, res) => {
   const { rows } = await query('SELECT * FROM home_sections ORDER BY sort_order ASC');
   res.json({ sections: rows });
+});
+
+// Public: a single section by key. For anything that only needs ONE
+// section's content (e.g. the footer reading social_links) rather than
+// the whole home page — GET / returns every enabled section's full
+// content in one payload, which includes things like hero video (stored
+// raw, since video can't be resized the way photos are; easily several
+// MB). Footer.jsx renders on every page site-wide, so before this existed
+// it was fetching that entire payload — hero video included — on every
+// single page view, not just when someone visited Home.
+router.get('/:key', async (req, res) => {
+  const { rows } = await query(
+    'SELECT * FROM home_sections WHERE section_key = $1 AND enabled = TRUE',
+    [req.params.key]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Section not found.' });
+  res.json({ section: rows[0] });
 });
 
 router.put('/:key', requireAdmin, async (req, res) => {

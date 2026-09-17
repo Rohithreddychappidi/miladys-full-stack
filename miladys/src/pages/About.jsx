@@ -25,14 +25,17 @@ export default function About() {
   const [story, setStory] = useState(defaults.story);
 
   useEffect(() => {
-    api
-      .getHomeSections()
-      .then(({ sections }) => {
-        const byKey = Object.fromEntries(sections.map((s) => [s.section_key, s.content]));
-        if (byKey.about_hero) setHero({ ...defaults.hero, ...byKey.about_hero });
-        if (byKey.about_story) setStory({ ...defaults.story, ...byKey.about_story });
-      })
-      .catch(() => {});
+    // Fetches only the two sections this page actually needs, in
+    // parallel, instead of every enabled home section (which includes the
+    // hero section — ~15MB with its video — that has nothing to do with
+    // the About page).
+    Promise.all([
+      api.getHomeSection('about_hero').catch(() => null),
+      api.getHomeSection('about_story').catch(() => null),
+    ]).then(([heroRes, storyRes]) => {
+      if (heroRes?.section?.content) setHero({ ...defaults.hero, ...heroRes.section.content });
+      if (storyRes?.section?.content) setStory({ ...defaults.story, ...storyRes.section.content });
+    });
   }, []);
 
   const paragraphs = story.paragraphs?.length ? story.paragraphs : defaults.story.paragraphs;

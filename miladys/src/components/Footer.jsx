@@ -18,11 +18,15 @@ export default function Footer() {
   const [social, setSocial] = useState(defaultSocial);
 
   useEffect(() => {
+    // Fetches only the social_links section instead of every enabled home
+    // section (which includes things like hero video, stored raw and
+    // potentially several MB) — this component renders on every page
+    // site-wide, so pulling the full payload here meant every page view,
+    // not just Home, was downloading the hero video.
     api
-      .getHomeSections()
-      .then(({ sections }) => {
-        const found = sections.find((s) => s.section_key === 'social_links');
-        if (found?.content) setSocial({ ...defaultSocial, ...found.content });
+      .getHomeSection('social_links')
+      .then(({ section }) => {
+        if (section?.content) setSocial({ ...defaultSocial, ...section.content });
       })
       .catch(() => {});
   }, []);

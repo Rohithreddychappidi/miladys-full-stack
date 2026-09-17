@@ -96,6 +96,7 @@ export const api = {
 
   // home sections (CMS)
   getHomeSections: () => request('/api/home-sections', { auth: false }),
+  getHomeSection: (key) => request(`/api/home-sections/${key}`, { auth: false }),
   getAllHomeSections: () => request('/api/home-sections/all'),
   updateHomeSection: (key, payload) => request(`/api/home-sections/${key}`, { method: 'PUT', body: payload }),
 

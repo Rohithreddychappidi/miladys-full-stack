@@ -71,8 +71,11 @@ export default function Checkout() {
   }
 
   useEffect(() => {
-    api.getHomeSections().then(({ sections }) => {
-      const section = sections.find((s) => s.section_key === 'shipping_settings');
+    // Only shipping_settings is needed here — see the comment in
+    // ProductDetail.jsx for why fetching the full home-sections payload
+    // (hero video included, ~15MB) on a page that has nothing to do with
+    // Home is worth avoiding.
+    api.getHomeSection('shipping_settings').then(({ section }) => {
       if (section?.content) {
         const { fee, freeThreshold } = section.content;
         setShippingSettings({

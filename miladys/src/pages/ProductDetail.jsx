@@ -28,9 +28,13 @@ export default function ProductDetail() {
   useEffect(() => {
     let active = true;
     api.getProducts().then(({ products }) => active && setAllProducts(products)).catch(() => active && setAllProducts([]));
-    api.getHomeSections().then(({ sections }) => {
+    // Only the recommended-products section is needed here — getHomeSections()
+    // returns every enabled section's full content in one payload, which
+    // includes the hero section (currently ~15MB with its video). This page
+    // renders on every product view, so pulling that was adding ~15MB to
+    // the single most-visited page type on the site for no reason.
+    api.getHomeSection('recommended').then(({ section }) => {
       if (!active) return;
-      const section = sections.find((s) => s.section_key === 'recommended');
       if (section?.content) setRecommended((prev) => ({ ...prev, ...section.content }));
     }).catch(() => {});
     return () => { active = false; };
