@@ -91,56 +91,63 @@ export default function AdminProducts() {
   function resetForm() {
     setForm(emptyForm);
     setEditingId(null);
+    pricingEditRef.current = null;
     if (fileInput.current) fileInput.current.value = '';
   }
 
   // Any two of MRP / Discount % / Price can be filled in, in any order,
-  // and the third fills itself in — whichever field the admin is NOT
-  // currently typing into gets recomputed from the other two, as long as
-  // at least one of those other two already has a value. MRP is treated
-  // as the "anchor" when present (matches how the site displays pricing —
-  // MRP struck through next to Price), so filling MRP + Discount % always
-  // drives Price; only when MRP is the one still empty does filling
-  // Price + Discount % drive MRP instead.
+  // and the third fills itself in. MRP is the "anchor" when present
+  // (matches how pricing displays on the site — MRP struck through next
+  // to Price) — but which field gets computed is decided ONCE per typing
+  // session in a field, then stuck to for the rest of that session. Without
+  // that stickiness, typing a two-digit discount (say "15") would recompute
+  // MRP after the first keystroke, and then — because MRP now has a value —
+  // the SECOND keystroke would see "MRP is present" and flip to recomputing
+  // Price instead, silently overwriting whatever price was typed. Sticking
+  // to the same target field for as long as the admin keeps typing in the
+  // same box avoids that flip; it only re-decides once they move to a
+  // different field.
+  const pricingEditRef = useRef(null); // { editing: 'mrp' | 'discountPercent' | 'price', target: string | null }
 
-  function handleMrpChange(value) {
+  function computeField(target, f) {
+    if (target === 'price') return priceFromDiscount(f.mrp, f.discountPercent);
+    if (target === 'mrp') return mrpFromDiscount(f.price, f.discountPercent);
+    if (target === 'discountPercent') return discountFromPrices(f.mrp, f.price);
+    return '';
+  }
+
+  function handlePricingFieldChange(editing, value) {
     setForm((f) => {
-      const next = { ...f, mrp: value };
-      if (f.discountPercent !== '') {
-        const price = priceFromDiscount(value, f.discountPercent);
-        if (price !== '') next.price = price;
-      } else if (f.price !== '') {
-        next.discountPercent = discountFromPrices(value, f.price);
+      const next = { ...f, [editing]: value };
+      let target;
+      if (pricingEditRef.current?.editing === editing) {
+        target = pricingEditRef.current.target;
+      } else {
+        // Freshly decide, based on which of the OTHER two fields already
+        // have a value — MRP wins as the anchor when both are candidates.
+        if (editing === 'mrp') target = next.discountPercent !== '' ? 'price' : (next.price !== '' ? 'discountPercent' : null);
+        else if (editing === 'discountPercent') target = next.mrp !== '' ? 'price' : (next.price !== '' ? 'mrp' : null);
+        else target = next.mrp !== '' ? 'discountPercent' : (next.discountPercent !== '' ? 'mrp' : null);
+        pricingEditRef.current = { editing, target };
+      }
+      if (target) {
+        const computed = computeField(target, next);
+        if (computed !== '') next[target] = computed;
       }
       return next;
     });
+  }
+
+  function handleMrpChange(value) {
+    handlePricingFieldChange('mrp', value);
   }
 
   function handleDiscountChange(value) {
-    setForm((f) => {
-      const next = { ...f, discountPercent: value };
-      if (f.mrp !== '') {
-        const price = priceFromDiscount(f.mrp, value);
-        if (price !== '') next.price = price;
-      } else if (f.price !== '') {
-        const mrp = mrpFromDiscount(f.price, value);
-        if (mrp !== '') next.mrp = mrp;
-      }
-      return next;
-    });
+    handlePricingFieldChange('discountPercent', value);
   }
 
   function handlePriceChange(value) {
-    setForm((f) => {
-      const next = { ...f, price: value };
-      if (f.mrp !== '') {
-        next.discountPercent = discountFromPrices(f.mrp, value);
-      } else if (f.discountPercent !== '') {
-        const mrp = mrpFromDiscount(value, f.discountPercent);
-        if (mrp !== '') next.mrp = mrp;
-      }
-      return next;
-    });
+    handlePricingFieldChange('price', value);
   }
 
   async function handleSubmit(e) {
@@ -182,6 +189,7 @@ export default function AdminProducts() {
   // an unrelated field like price would submit `images: []` and silently
   // wipe out the product's existing gallery photos.
   async function handleEdit(product) {
+    pricingEditRef.current = null;
     setForm({
       name: product.name,
       category: product.category,

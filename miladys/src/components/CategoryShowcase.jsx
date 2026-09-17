@@ -405,6 +405,19 @@ export default function CategoryShowcase({ categories, note, heading }) {
           opacity: 0;
           transition: opacity 0.3s ease;
         }
+        /* The dark gradient scrim (for text contrast) was still showing on
+           every peeking card even after the name above was hidden — with
+           no text left to contrast against, it just reads as an uneven
+           tint. Fading it out too makes a non-focused card fully transparent
+           except for the photo itself, matching on both sides. Desktop
+           cards are left alone here — they don't peek/overlap like the
+           mobile strip does, and their name label stays visible there, so
+           removing their scrim would hurt readability instead of fixing
+           anything. */
+        .showcase-scroll-card:not(.is-focus) .showcase-card-overlay {
+          opacity: 0;
+          transition: opacity 0.3s ease;
+        }
 
         .showcase-scroll {
           display: flex;
