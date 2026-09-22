@@ -48,6 +48,7 @@ export default function Home() {
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [hero, setHero] = useState(defaults.hero);
+  const [heroReady, setHeroReady] = useState(false);
   const [showcase, setShowcase] = useState(defaults.showcase);
   const [featured, setFeatured] = useState(defaults.featured);
   const [recommended, setRecommended] = useState(defaults.recommended);
@@ -72,7 +73,13 @@ export default function Home() {
         if (byKey.story) setStory({ ...defaults.story, ...byKey.story });
         if (byKey.promo_banner) setPromo(byKey.promo_banner);
       })
-      .catch(() => {});
+      .catch(() => {})
+      // Marks the hero as "resolved" whether the fetch succeeded or failed,
+      // so HeroSlider knows the difference between "still loading" and
+      // "loaded, and there's genuinely nothing configured" — see the
+      // heroReady comment on the <HeroSlider> element below for why that
+      // distinction matters.
+      .finally(() => setHeroReady(true));
   }, []);
 
   // Admin's hand-picked list from /admin/home, in the order they set it —
@@ -98,7 +105,12 @@ export default function Home() {
       />
       <section className="hero">
         <div className="hero-visual" id="page-hero">
-          <HeroSlider slides={hero.slides} mobileSlides={hero.mobileSlides} />
+          {/* Passing null (not an empty array) while the CMS fetch is still
+              in flight tells HeroSlider "not loaded yet" — it shows a plain
+              placeholder instead of its built-in stock fallback (a MixKit
+              video), which used to flash for the ~2-3s the fetch takes on
+              every visit before the admin's real hero video swapped in. */}
+          <HeroSlider slides={heroReady ? hero.slides : null} mobileSlides={heroReady ? hero.mobileSlides : null} />
         </div>
         <div className="hero-card-wrap">
           <div className="container hero-card">

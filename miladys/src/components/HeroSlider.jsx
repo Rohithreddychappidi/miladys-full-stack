@@ -19,12 +19,26 @@ export default function HeroSlider({ slides: cmsSlides, mobileSlides: cmsMobileS
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  // The caller passes `null` for both props while its CMS content is still
+  // loading (as opposed to `undefined`/omitted, which means "loaded, and
+  // there's nothing configured"). That distinction matters: without it,
+  // this component couldn't tell "still loading" apart from "genuinely
+  // nothing set", and used to show its own hardcoded stock-video fallback
+  // for however long the real fetch took — a jarring flash of unrelated
+  // footage before the admin's actual video appeared, on every single
+  // visit. A still-loading state now renders a plain placeholder instead.
+  const stillLoading = cmsSlides === null && cmsMobileSlides === null;
+
   // Mobile slides (uploaded separately in the admin panel) take over on
   // narrow viewports when present; otherwise fall back to the desktop set,
   // and finally to the built-in defaults so the hero never renders empty.
   const activeCmsSlides = isMobile && Array.isArray(cmsMobileSlides) && cmsMobileSlides.length
     ? cmsMobileSlides
     : cmsSlides;
+
+  if (stillLoading) {
+    return <div className="hero-slider hero-slider-loading" aria-hidden="true" />;
+  }
 
   const slides =
     Array.isArray(activeCmsSlides) && activeCmsSlides.length
