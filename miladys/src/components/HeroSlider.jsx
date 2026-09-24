@@ -6,6 +6,20 @@ const defaultSlides = [
   { id: 3, type: 'image', src: 'https://images.unsplash.com/photo-1518893063132-36e46dbe2428?auto=format&fit=crop&w=1800&h=760&q=80', alt: 'Rich red silk textile' },
 ];
 
+// A single blank slide, used only while the real CMS content is still
+// loading. Deliberately routed through the exact same DesktopHeroSlider /
+// MobileHeroSlider rendering path as everything else (rather than an
+// early-return with a different, minimal bit of markup) — the
+// full-viewport height here comes from the .hero-slider container's own
+// CSS regardless of what's inside it, but reusing the identical structure
+// removes any chance of the loading state behaving differently from the
+// real one. A 1x1 transparent GIF rather than an empty src — an empty
+// src on an <img> can trigger a spurious request to the page's own URL in
+// some browsers — so nothing loads or renders inside it either way, just
+// the container's own background shows through.
+const BLANK_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+const loadingSlides = [{ id: 'loading', type: 'image', src: BLANK_IMAGE, alt: '' }];
+
 export default function HeroSlider({ slides: cmsSlides, mobileSlides: cmsMobileSlides }) {
   const [isMobile, setIsMobile] = useState(
     typeof window !== 'undefined' ? window.innerWidth <= 640 : false,
@@ -26,7 +40,7 @@ export default function HeroSlider({ slides: cmsSlides, mobileSlides: cmsMobileS
   // nothing set", and used to show its own hardcoded stock-video fallback
   // for however long the real fetch took — a jarring flash of unrelated
   // footage before the admin's actual video appeared, on every single
-  // visit. A still-loading state now renders a plain placeholder instead.
+  // visit.
   const stillLoading = cmsSlides === null && cmsMobileSlides === null;
 
   // Mobile slides (uploaded separately in the admin panel) take over on
@@ -36,12 +50,9 @@ export default function HeroSlider({ slides: cmsSlides, mobileSlides: cmsMobileS
     ? cmsMobileSlides
     : cmsSlides;
 
-  if (stillLoading) {
-    return <div className="hero-slider hero-slider-loading" aria-hidden="true" />;
-  }
-
-  const slides =
-    Array.isArray(activeCmsSlides) && activeCmsSlides.length
+  const slides = stillLoading
+    ? loadingSlides
+    : (Array.isArray(activeCmsSlides) && activeCmsSlides.length
       // The key has to include the source URL, not just the index. A
       // <video> element whose src *attribute* changes does NOT reload —
       // it keeps playing the already-buffered clip until .load() is
@@ -50,7 +61,7 @@ export default function HeroSlider({ slides: cmsSlides, mobileSlides: cmsMobileS
       // kept playing for its full duration before the new one appeared.
       // Including the src makes React mount a fresh element instead.
       ? activeCmsSlides.map((s, i) => ({ id: `${i}-${s.url}`, type: s.type, src: s.url, alt: 'Milady\'s' }))
-      : defaultSlides;
+      : defaultSlides);
 
   return isMobile
     ? <MobileHeroSlider slides={slides} />
