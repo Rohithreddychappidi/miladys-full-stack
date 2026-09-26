@@ -74,11 +74,26 @@ function DesktopHeroSlider({ slides }) {
   const [active, setActive] = useState(0);
   const timerRef = useRef(null);
   const videoRef = useRef(null);
+  // Tracks whether the CURRENTLY ACTIVE video slide actually has a frame
+  // ready to show yet. A <video> has nothing to render until enough of it
+  // has downloaded — before that, the slide's own background shows
+  // through the empty video element. The slide was becoming "active" (and
+  // so fully opaque) the instant it mounted, regardless of whether the
+  // video had buffered anything yet, so what should have been a smooth
+  // crossfade was actually an abrupt pop the moment the video finally had
+  // a frame to show. Gating the reveal on the video's own "I have a frame
+  // now" event (loadeddata) instead means the fade-in only starts once
+  // there's actually something to fade in to.
+  const [videoReady, setVideoReady] = useState(false);
   const slidesKey = slides.map((s) => s.src).join('|');
 
   useEffect(() => {
     setActive(0);
   }, [slidesKey]);
+
+  useEffect(() => {
+    setVideoReady(false);
+  }, [active, slidesKey]);
 
   useEffect(() => {
     clearInterval(timerRef.current);
@@ -112,23 +127,31 @@ function DesktopHeroSlider({ slides }) {
 
   return (
     <div className="hero-slider" aria-hidden="true">
-      {slides.map((s, i) => (
-        <div key={s.id} className={'hero-slide' + (i === active ? ' active' : '')}>
-          {s.type === 'video' ? (
-            <video
-              ref={videoRef}
-              src={s.src}
-              muted
-              playsInline
-              autoPlay
-              onEnded={handleVideoEnded}
-              aria-label={s.alt}
-            />
-          ) : (
-            <img src={s.src} alt={s.alt} />
-          )}
-        </div>
-      ))}
+      {slides.map((s, i) => {
+        const isPendingVideo = s.type === 'video' && i === active && !videoReady;
+        return (
+          <div
+            key={s.id}
+            className={'hero-slide' + (i === active ? ' active' : '') + (isPendingVideo ? ' video-pending' : '')}
+          >
+            {s.type === 'video' ? (
+              <video
+                ref={videoRef}
+                src={s.src}
+                muted
+                playsInline
+                autoPlay
+                preload="auto"
+                onEnded={handleVideoEnded}
+                onLoadedData={() => setVideoReady(true)}
+                aria-label={s.alt}
+              />
+            ) : (
+              <img src={s.src} alt={s.alt} />
+            )}
+          </div>
+        );
+      })}
 
       {slides.length > 1 && (
         <>
@@ -154,6 +177,27 @@ function DesktopHeroSlider({ slides }) {
 
       <HeroSliderStyles />
     </div>
+  );
+}
+
+// Fades a mobile slide's video in once it actually has a frame ready,
+// same reasoning as the desktop video-pending gating above — otherwise
+// the video just pops in abruptly the moment it finishes buffering,
+// rather than the background smoothly giving way to it.
+function MobileVideoSlide({ src, alt }) {
+  const [ready, setReady] = useState(false);
+  return (
+    <video
+      src={src}
+      muted
+      playsInline
+      autoPlay
+      loop
+      preload="auto"
+      aria-label={alt}
+      onLoadedData={() => setReady(true)}
+      style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.6s ease' }}
+    />
   );
 }
 
@@ -193,7 +237,7 @@ function MobileHeroSlider({ slides }) {
         {slides.map((s) => (
           <div key={s.id} className="hero-slide-mobile">
             {s.type === 'video' ? (
-              <video src={s.src} muted playsInline autoPlay loop aria-label={s.alt} />
+              <MobileVideoSlide src={s.src} alt={s.alt} />
             ) : (
               <img src={s.src} alt={s.alt} />
             )}
@@ -244,6 +288,12 @@ function HeroSliderStyles() {
         transition: opacity 0.9s ease;
       }
       .hero-slide.active { opacity: 1; }
+      /* Higher specificity than .hero-slide.active above (3 classes vs 2)
+         so this correctly wins regardless of source order — keeps a video
+         slide invisible until it actually has a frame ready, so the
+         eventual reveal is a real opacity transition rather than an
+         instant pop the moment the video happens to finish buffering. */
+      .hero-slide.active.video-pending { opacity: 0; }
       .hero-slide img,
       .hero-slide video {
         width: 100%;
