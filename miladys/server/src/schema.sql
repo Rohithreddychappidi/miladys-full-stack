@@ -66,12 +66,15 @@ CREATE TABLE IF NOT EXISTS products (
   -- Extra gallery photos beyond the main `image` (cover), shown as a
   -- thumbnail strip on the product page. Array of image URLs / data URLs.
   images      JSONB NOT NULL DEFAULT '[]'::jsonb,
+  -- Color variants: array of { name, hex, image, images, stock }
+  colors      JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Safe on every boot: adds the column for databases created before the
 -- gallery feature existed. No-op once it's there.
 ALTER TABLE products ADD COLUMN IF NOT EXISTS images JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS colors JSONB NOT NULL DEFAULT '[]'::jsonb;
 -- Lets the admin hide a product from the storefront without deleting it
 -- (and losing its order history / reviews link) — hidden products stay
 -- fully visible and editable in the admin panel.
@@ -205,8 +208,11 @@ CREATE TABLE IF NOT EXISTS order_items (
   product_name TEXT NOT NULL,
   product_image TEXT,
   price        INTEGER NOT NULL,
-  qty          INTEGER NOT NULL
+  qty          INTEGER NOT NULL,
+  color        TEXT
 );
+
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS color TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);

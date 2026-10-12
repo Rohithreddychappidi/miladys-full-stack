@@ -18,7 +18,7 @@ router.get('/', async (req, res) => {
   // route below still selects it, where it's actually needed) is what
   // was making the collection page feel slow on every device equally —
   // it was never a device/rendering issue, it was payload size.
-  const listColumns = 'id, name, category_id, price, mrp, stock, description, image, active, created_at';
+  const listColumns = 'id, name, category_id, price, mrp, stock, description, image, colors, active, created_at';
   const { rows } = category
     ? await query(`SELECT ${listColumns} FROM products WHERE active = true AND category_id = $1 ORDER BY created_at DESC`, [category])
     : await query(`SELECT ${listColumns} FROM products WHERE active = true ORDER BY created_at DESC`);
@@ -40,27 +40,51 @@ router.get('/:id', async (req, res) => {
 });
 
 router.post('/', requireAdmin, async (req, res) => {
-  const { name, category, price, mrp, stock, description, image, images } = req.body || {};
+  const { name, category, price, mrp, stock, description, image, images, colors } = req.body || {};
   if (!name?.trim() || !category) return res.status(400).json({ error: 'name and category are required.' });
   const id = 'p' + Date.now();
   const { rows } = await query(
-    `INSERT INTO products (id, name, category_id, price, mrp, stock, description, image, images)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb) RETURNING *`,
-    [id, name.trim(), category, Number(price) || 0, Number(mrp) || Number(price) || 0, Number(stock) || 0, description || '', image || '', JSON.stringify(Array.isArray(images) ? images : [])]
+    `INSERT INTO products (id, name, category_id, price, mrp, stock, description, image, images, colors)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb) RETURNING *`,
+    [
+      id,
+      name.trim(),
+      category,
+      Number(price) || 0,
+      Number(mrp) || Number(price) || 0,
+      Number(stock) || 0,
+      description || '',
+      image || '',
+      JSON.stringify(Array.isArray(images) ? images : []),
+      JSON.stringify(Array.isArray(colors) ? colors : []),
+    ]
   );
   res.status(201).json({ product: mapProduct(rows[0]) });
 });
 
 router.put('/:id', requireAdmin, async (req, res) => {
-  const { name, category, price, mrp, stock, description, image, images, active } = req.body || {};
+  const { name, category, price, mrp, stock, description, image, images, colors, active } = req.body || {};
   const { rows } = await query(
     `UPDATE products SET
        name = COALESCE($1,name), category_id = COALESCE($2,category_id),
        price = COALESCE($3,price), mrp = COALESCE($4,mrp), stock = COALESCE($5,stock),
        description = COALESCE($6,description), image = COALESCE($7,image),
-       images = COALESCE($8::jsonb, images), active = COALESCE($9,active)
-     WHERE id = $10 RETURNING *`,
-    [name, category, price, mrp, stock, description, image, images !== undefined ? JSON.stringify(images) : null, active, req.params.id]
+       images = COALESCE($8::jsonb, images), colors = COALESCE($9::jsonb, colors),
+       active = COALESCE($10,active)
+     WHERE id = $11 RETURNING *`,
+    [
+      name,
+      category,
+      price,
+      mrp,
+      stock,
+      description,
+      image,
+      images !== undefined ? JSON.stringify(images) : null,
+      colors !== undefined ? JSON.stringify(colors) : null,
+      active,
+      req.params.id,
+    ]
   );
   if (!rows[0]) return res.status(404).json({ error: 'Product not found.' });
   res.json({ product: mapProduct(rows[0]) });

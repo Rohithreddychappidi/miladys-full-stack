@@ -99,7 +99,7 @@ export default function AdminOrders() {
                 {o.items.map((item) => (
                   <Link to={`/products/${item.product_id}`} target="_blank" rel="noopener noreferrer" className="item-link" key={item.id}>
                     {item.product_image && <img src={item.product_image} alt="" />}
-                    <span>{item.product_name} × {item.qty}</span>
+                    <span>{item.product_name}{item.color ? ` (${item.color})` : ''} × {item.qty}</span>
                   </Link>
                 ))}
               </div>

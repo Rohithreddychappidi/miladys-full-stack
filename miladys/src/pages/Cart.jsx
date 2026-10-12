@@ -24,24 +24,28 @@ export default function Cart() {
         ) : (
           <div className="cart-grid">
             <div className="cart-items">
-              {items.map((item) => (
-                <div className="cart-row" key={item.id}>
-                  <Link to={`/products/${item.id}`} className="cart-thumb">
-                    <img src={item.image} alt={item.name} />
-                  </Link>
-                  <div className="cart-item-info">
-                    <Link to={`/products/${item.id}`} className="cart-item-name">{item.name}</Link>
-                    <span className="cart-item-price">{formatINR(item.price)}</span>
+              {items.map((item) => {
+                const itemKey = item.key || (item.color ? `${item.id}__${item.color}` : item.id);
+                return (
+                  <div className="cart-row" key={itemKey}>
+                    <Link to={`/products/${item.id}`} className="cart-thumb">
+                      <img src={item.image} alt={item.name} />
+                    </Link>
+                    <div className="cart-item-info">
+                      <Link to={`/products/${item.id}`} className="cart-item-name">{item.name}</Link>
+                      {item.color && <span className="cart-item-color">Color: {item.color}</span>}
+                      <span className="cart-item-price">{formatINR(item.price)}</span>
+                    </div>
+                    <div className="qty-control">
+                      <button type="button" onClick={() => updateQty(itemKey, item.qty - 1)} aria-label="Decrease quantity">−</button>
+                      <span>{item.qty}</span>
+                      <button type="button" onClick={() => updateQty(itemKey, item.qty + 1)} aria-label="Increase quantity">+</button>
+                    </div>
+                    <span className="line-total">{formatINR(item.price * item.qty)}</span>
+                    <button className="remove-btn" onClick={() => removeItem(itemKey)} aria-label={`Remove ${item.name}`}>Remove</button>
                   </div>
-                  <div className="qty-control">
-                    <button type="button" onClick={() => updateQty(item.id, item.qty - 1)} aria-label="Decrease quantity">−</button>
-                    <span>{item.qty}</span>
-                    <button type="button" onClick={() => updateQty(item.id, item.qty + 1)} aria-label="Increase quantity">+</button>
-                  </div>
-                  <span className="line-total">{formatINR(item.price * item.qty)}</span>
-                  <button className="remove-btn" onClick={() => removeItem(item.id)} aria-label={`Remove ${item.name}`}>Remove</button>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="cart-summary">
@@ -99,8 +103,9 @@ export default function Cart() {
         }
         .cart-thumb { width: 72px; height: 88px; border-radius: var(--radius-sm); overflow: hidden; display: block; }
         .cart-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
-        .cart-item-info { display: flex; flex-direction: column; gap: 6px; }
+        .cart-item-info { display: flex; flex-direction: column; gap: 4px; }
         .cart-item-name { font-size: 13.5px; color: var(--ink-900); line-height: 1.4; }
+        .cart-item-color { font-size: 11.5px; color: var(--maroon-900); font-weight: 500; }
         .cart-item-price { font-size: 12.5px; color: var(--ink-400); }
         .qty-control {
           display: flex;

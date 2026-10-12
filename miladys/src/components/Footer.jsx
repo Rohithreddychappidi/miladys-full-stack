@@ -84,6 +84,13 @@ export default function Footer() {
         </div>
 
         <div className="footer-col">
+          <h4>Policies</h4>
+          <Link to="/privacy-policy">Privacy Policy</Link>
+          <Link to="/terms-and-conditions">Terms &amp; Conditions</Link>
+          <Link to="/return-policy">Return &amp; Refund Policy</Link>
+        </div>
+
+        <div className="footer-col">
           <h4>Reach Us</h4>
           <a href="tel:+917842225444">+91 78422 25444</a>
           <a href="mailto:themiladysofficial@gmail.com">themiladysofficial@gmail.com</a>
@@ -100,6 +107,13 @@ export default function Footer() {
 
       <div className="container footer-bottom">
         <span>© {new Date().getFullYear()} Milady&apos;s. All rights reserved.</span>
+        <div className="footer-bottom-links">
+          <Link to="/privacy-policy">Privacy</Link>
+          <span className="dot">·</span>
+          <Link to="/terms-and-conditions">Terms</Link>
+          <span className="dot">·</span>
+          <Link to="/return-policy">Returns &amp; Refunds</Link>
+        </div>
       </div>
 
       <style>{`
@@ -110,8 +124,8 @@ export default function Footer() {
         }
         .footer-grid {
           display: grid;
-          grid-template-columns: 1.4fr 1fr 1fr 1fr;
-          gap: 40px;
+          grid-template-columns: 1.3fr 0.9fr 1fr 1.1fr 0.9fr;
+          gap: 32px;
           padding-bottom: 48px;
           border-bottom: 1px solid rgba(255,255,255,0.08);
         }
@@ -162,13 +176,35 @@ export default function Footer() {
         .footer-bottom {
           padding: 22px 32px;
           font-size: 12.5px;
-          opacity: 0.6;
+          opacity: 0.85;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 12px;
         }
-        @media (max-width: 860px) {
+        .footer-bottom-links {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .footer-bottom-links a {
+          color: var(--blush-300);
+          text-decoration: none;
+          transition: color 0.2s;
+        }
+        .footer-bottom-links a:hover {
+          color: var(--ivory);
+        }
+        .footer-bottom-links .dot {
+          opacity: 0.5;
+        }
+        @media (max-width: 960px) {
           .footer-grid { grid-template-columns: 1fr 1fr; }
         }
         @media (max-width: 520px) {
           .footer-grid { grid-template-columns: 1fr; }
+          .footer-bottom { flex-direction: column; align-items: flex-start; }
         }
       `}</style>
     </footer>

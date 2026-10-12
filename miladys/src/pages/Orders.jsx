@@ -122,7 +122,7 @@ export default function Orders() {
                         {item.product_image && <img src={item.product_image} alt={item.product_name} />}
                         <div>
                           <p>{item.product_name}</p>
-                          <span>Qty {item.qty} · {formatINR(item.price)}</span>
+                          <span>{item.color ? `Color: ${item.color} · ` : ''}Qty {item.qty} · {formatINR(item.price)}</span>
                         </div>
                       </div>
                     ))}

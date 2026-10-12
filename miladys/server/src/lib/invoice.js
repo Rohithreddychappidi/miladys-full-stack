@@ -102,7 +102,8 @@ export function renderInvoice(res, { order, items, customer }) {
   items.forEach((item, i) => {
     const rowHeight = 24;
     if (i % 2 === 1) doc.rect(50, rowY, 495, rowHeight).fill('#FAF6F1');
-    doc.fillColor(INK).text(item.product_name, col.item + 8, rowY + 7, { width: 275 });
+    const displayName = item.color ? `${item.product_name} (${item.color})` : item.product_name;
+    doc.fillColor(INK).text(displayName, col.item + 8, rowY + 7, { width: 275 });
     doc.text(String(item.qty), col.qty, rowY + 7, { width: 40, align: 'right' });
     doc.text(formatINR(item.price), col.price, rowY + 7, { width: 60, align: 'right' });
     doc.text(formatINR(item.price * item.qty), col.total, rowY + 7, { width: 65, align: 'right' });

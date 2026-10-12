@@ -40,12 +40,17 @@ router.post('/create', requireAuth, async (req, res) => {
 
   let subtotal = 0;
   const lineItems = [];
-  for (const { productId, qty } of items) {
+  for (const { productId, qty, color, image: chosenImage } of items) {
     const p = byId[productId];
     if (!p) return res.status(400).json({ error: `Product ${productId} not found.` });
     if (p.stock < qty) return res.status(400).json({ error: `${p.name} is out of stock.` });
     subtotal += p.price * qty;
-    lineItems.push({ product: p, qty });
+    let itemImage = chosenImage;
+    if (!itemImage && color && Array.isArray(p.colors)) {
+      const match = p.colors.find((c) => c.name === color);
+      if (match?.image) itemImage = match.image;
+    }
+    lineItems.push({ product: p, qty, color: color || null, image: itemImage || p.image });
   }
 
   // Re-validate the coupon server-side rather than trusting a discount
@@ -79,11 +84,11 @@ router.post('/create', requireAuth, async (req, res) => {
     );
     const order = orderInsert.rows[0];
 
-    for (const { product, qty } of lineItems) {
+    for (const { product, qty, color, image } of lineItems) {
       await client.query(
-        `INSERT INTO order_items (order_id, product_id, product_name, product_image, price, qty)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [order.id, product.id, product.name, product.image, product.price, qty]
+        `INSERT INTO order_items (order_id, product_id, product_name, product_image, price, qty, color)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [order.id, product.id, product.name, image || product.image, product.price, qty, color || null]
       );
     }
 

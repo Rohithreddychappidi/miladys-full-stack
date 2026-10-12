@@ -10,30 +10,49 @@ export function CartProvider({ children }) {
     setItems(getCart());
   }, []);
 
-  function addItem(product, qty = 1) {
+  function getItemKey(item) {
+    return item.key || (item.color ? `${item.id}__${item.color}` : item.id);
+  }
+
+  function addItem(product, qty = 1, color = null, image = null) {
+    const chosenColor = color || product.selectedColor || null;
+    const chosenImage = image || product.selectedImage || product.image;
+    const itemKey = chosenColor ? `${product.id}__${chosenColor}` : product.id;
+
     setItems((prev) => {
-      const existing = prev.find((i) => i.id === product.id);
+      const existing = prev.find((i) => getItemKey(i) === itemKey);
       const next = existing
-        ? prev.map((i) => (i.id === product.id ? { ...i, qty: i.qty + qty } : i))
-        : [...prev, { id: product.id, name: product.name, price: product.price, image: product.image, qty }];
+        ? prev.map((i) => (getItemKey(i) === itemKey ? { ...i, qty: i.qty + qty } : i))
+        : [
+            ...prev,
+            {
+              key: itemKey,
+              id: product.id,
+              name: product.name,
+              price: product.price,
+              image: chosenImage,
+              color: chosenColor,
+              qty,
+            },
+          ];
       saveCart(next);
       return next;
     });
   }
 
-  function updateQty(id, qty) {
+  function updateQty(keyOrId, qty) {
     setItems((prev) => {
       const next = qty <= 0
-        ? prev.filter((i) => i.id !== id)
-        : prev.map((i) => (i.id === id ? { ...i, qty } : i));
+        ? prev.filter((i) => getItemKey(i) !== keyOrId && i.id !== keyOrId)
+        : prev.map((i) => (getItemKey(i) === keyOrId || i.id === keyOrId ? { ...i, qty } : i));
       saveCart(next);
       return next;
     });
   }
 
-  function removeItem(id) {
+  function removeItem(keyOrId) {
     setItems((prev) => {
-      const next = prev.filter((i) => i.id !== id);
+      const next = prev.filter((i) => getItemKey(i) !== keyOrId && i.id !== keyOrId);
       saveCart(next);
       return next;
     });

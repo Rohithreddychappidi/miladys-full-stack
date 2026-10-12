@@ -3,7 +3,20 @@ import { api } from '../../data/api';
 import { formatINR } from '../../data/store';
 import { compressImageFile } from '../../utils/compressImage';
 
-const emptyForm = { name: '', category: '', price: '', mrp: '', discountPercent: '', stock: '', description: '', image: '', images: [], active: true };
+const emptyForm = { name: '', category: '', price: '', mrp: '', discountPercent: '', stock: '', description: '', image: '', images: [], colors: [], active: true };
+
+const SAREE_COLOR_PRESETS = [
+  { name: 'Maroon', hex: '#48181e' },
+  { name: 'Ruby Red', hex: '#9b111e' },
+  { name: 'Rani Pink', hex: '#db2777' },
+  { name: 'Peacock Blue', hex: '#005f73' },
+  { name: 'Royal Blue', hex: '#1e3a8a' },
+  { name: 'Bottle Green', hex: '#0f5132' },
+  { name: 'Mustard Gold', hex: '#d97706' },
+  { name: 'Plum Wine', hex: '#581c87' },
+  { name: 'Jet Black', hex: '#1a1a1a' },
+  { name: 'Ivory Cream', hex: '#fdfbf7' },
+];
 
 // Keeps MRP / discount % / price in sync with each other, whichever one the
 // admin actually typed into. Rounds to whole rupees since that's what the
@@ -88,6 +101,57 @@ export default function AdminProducts() {
     setForm((f) => ({ ...f, images: (f.images || []).filter((_, idx) => idx !== i) }));
   }
 
+  function addColorVariant() {
+    setForm((f) => ({
+      ...f,
+      colors: [
+        ...(f.colors || []),
+        { name: '', hex: '#48181e', image: '', images: [], stock: '' },
+      ],
+    }));
+  }
+
+  function updateColorVariant(idx, patch) {
+    setForm((f) => ({
+      ...f,
+      colors: (f.colors || []).map((c, i) => (i === idx ? { ...c, ...patch } : c)),
+    }));
+  }
+
+  function removeColorVariant(idx) {
+    setForm((f) => ({
+      ...f,
+      colors: (f.colors || []).filter((_, i) => i !== idx),
+    }));
+  }
+
+  async function handleColorImage(idx, file) {
+    if (!file) return;
+    const dataUrl = await compressImageFile(file);
+    updateColorVariant(idx, { image: dataUrl });
+  }
+
+  async function handleColorGalleryFiles(idx, files) {
+    const fileList = Array.from(files || []);
+    if (!fileList.length) return;
+    const added = await Promise.all(fileList.map((f) => compressImageFile(f)));
+    setForm((f) => ({
+      ...f,
+      colors: (f.colors || []).map((c, i) =>
+        i === idx ? { ...c, images: [...(c.images || []), ...added] } : c
+      ),
+    }));
+  }
+
+  function removeColorGalleryPhoto(colorIdx, photoIdx) {
+    setForm((f) => ({
+      ...f,
+      colors: (f.colors || []).map((c, i) =>
+        i === colorIdx ? { ...c, images: (c.images || []).filter((_, pi) => pi !== photoIdx) } : c
+      ),
+    }));
+  }
+
   function resetForm() {
     setForm(emptyForm);
     setEditingId(null);
@@ -164,6 +228,7 @@ export default function AdminProducts() {
       description: form.description,
       image: form.image || 'https://images.unsplash.com/photo-1717585679395-bbe39b5fb6bc?auto=format&fit=crop&w=800&q=80',
       images: form.images || [],
+      colors: form.colors || [],
       active: form.active !== false,
     };
 
@@ -200,13 +265,18 @@ export default function AdminProducts() {
       description: product.description,
       image: product.image,
       images: [],
+      colors: Array.isArray(product.colors) ? product.colors : [],
       active: product.active,
     });
     setEditingId(product.id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
     try {
       const { product: full } = await api.getProduct(product.id);
-      setForm((f) => (f.images.length ? f : { ...f, images: full.images || [] }));
+      setForm((f) => ({
+        ...f,
+        images: f.images.length ? f.images : (full.images || []),
+        colors: (f.colors && f.colors.length) ? f.colors : (full.colors || []),
+      }));
     } catch {
       /* list data already populated the rest of the form; gallery just stays empty to edit */
     }
@@ -410,6 +480,156 @@ export default function AdminProducts() {
             <input ref={galleryInput} type="file" accept="image/*" multiple hidden onChange={handleGalleryFiles} />
           </div>
 
+          <div className="form-section">
+            <div className="section-head-row">
+              <div>
+                <p className="section-label">Color Variants &amp; Separate Photos</p>
+                <p className="field-hint">
+                  If this saree design comes in multiple colors, add each color here with its own photo set.
+                </p>
+              </div>
+              <button type="button" className="btn btn-outline small-btn" onClick={addColorVariant}>
+                + Add Color
+              </button>
+            </div>
+
+            {(!form.colors || form.colors.length === 0) && (
+              <p className="field-hint empty-colors-hint">
+                No color variants added. The product will use the main photo above.
+              </p>
+            )}
+
+            {form.colors?.map((c, idx) => (
+              <div className="color-variant-card" key={idx}>
+                <div className="variant-card-head">
+                  <div className="variant-title">
+                    <span className="variant-swatch-badge" style={{ backgroundColor: c.hex || '#48181e' }} />
+                    <strong>{c.name || `Color #${idx + 1}`}</strong>
+                  </div>
+                  <button type="button" className="btn-remove-variant" onClick={() => removeColorVariant(idx)} aria-label="Remove color">
+                    ✕ Remove
+                  </button>
+                </div>
+
+                <div className="form-row">
+                  <label>
+                    Color name <span className="required-mark">*</span>
+                    <input
+                      type="text"
+                      placeholder="e.g. Royal Blue"
+                      value={c.name}
+                      onChange={(e) => updateColorVariant(idx, { name: e.target.value })}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Color shade (Hex)
+                    <div className="color-picker-row">
+                      <input
+                        type="color"
+                        value={c.hex || '#48181e'}
+                        onChange={(e) => updateColorVariant(idx, { hex: e.target.value })}
+                        className="color-picker-input"
+                      />
+                      <input
+                        type="text"
+                        value={c.hex || '#48181e'}
+                        onChange={(e) => updateColorVariant(idx, { hex: e.target.value })}
+                        placeholder="#48181e"
+                        className="color-hex-text"
+                      />
+                    </div>
+                  </label>
+                </div>
+
+                <div className="preset-chips">
+                  <span className="preset-label">Quick shade:</span>
+                  {SAREE_COLOR_PRESETS.map((preset) => (
+                    <button
+                      key={preset.name}
+                      type="button"
+                      className="preset-chip"
+                      onClick={() => updateColorVariant(idx, { name: c.name || preset.name, hex: preset.hex })}
+                      title={preset.name}
+                    >
+                      <span className="preset-dot" style={{ backgroundColor: preset.hex }} />
+                      {preset.name}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="form-row">
+                  <label>
+                    Variant stock (optional override)
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Same as base stock if blank"
+                      value={c.stock ?? ''}
+                      onChange={(e) => updateColorVariant(idx, { stock: e.target.value })}
+                    />
+                  </label>
+                </div>
+
+                <div className="variant-photos-box">
+                  <p className="variant-sub-label">Photos for {c.name || 'this color'}</p>
+                  <div className="variant-photos-row">
+                    <label className="variant-upload-btn">
+                      <span>📸 Set Color Cover Photo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        hidden
+                        onChange={(e) => handleColorImage(idx, e.target.files?.[0])}
+                      />
+                    </label>
+                    <label className="variant-upload-btn">
+                      <span>🖼 Add Gallery Photos</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        hidden
+                        onChange={(e) => handleColorGalleryFiles(idx, e.target.files)}
+                      />
+                    </label>
+                  </div>
+
+                  {c.image && (
+                    <div className="variant-cover-preview">
+                      <span className="cover-tag">Cover</span>
+                      <img src={c.image} alt="Color cover" />
+                      <button
+                        type="button"
+                        className="gallery-remove"
+                        onClick={() => updateColorVariant(idx, { image: '' })}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+
+                  {c.images?.length > 0 && (
+                    <div className="gallery-grid" style={{ marginTop: 10 }}>
+                      {c.images.map((src, photoIdx) => (
+                        <div className="gallery-thumb" key={photoIdx}>
+                          <img src={src} alt="" />
+                          <button
+                            type="button"
+                            className="gallery-remove"
+                            onClick={() => removeColorGalleryPhoto(idx, photoIdx)}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
           <div className="form-actions">
             <button type="submit" className="btn btn-primary">
               {editingId ? 'Save Changes' : 'Add Product'}
@@ -440,6 +660,19 @@ export default function AdminProducts() {
                       </>
                     )}
                   </span>
+                  {Array.isArray(p.colors) && p.colors.length > 0 && (
+                    <div className="row-colors-strip">
+                      {p.colors.map((c, ci) => (
+                        <span
+                          key={ci}
+                          className="row-color-dot"
+                          style={{ backgroundColor: c.hex || '#48181e' }}
+                          title={c.name}
+                        />
+                      ))}
+                      <span className="row-colors-count">{p.colors.length} {p.colors.length === 1 ? 'color' : 'colors'}</span>
+                    </div>
+                  )}
                 </div>
                 {p.active === false && <span className="hidden-badge">Hidden</span>}
                 <span className={`stock-badge ${stockTone(p.stock)}`}>{stockLabel(p.stock)}</span>
@@ -633,6 +866,121 @@ export default function AdminProducts() {
         @media (max-width: 980px) {
           .cms-layout { grid-template-columns: 1fr; }
         }
+        .section-head-row {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 14px;
+          margin-bottom: 12px;
+        }
+        .small-btn { padding: 6px 14px !important; font-size: 12px !important; }
+        .empty-colors-hint { font-style: italic; color: var(--ink-400); }
+        .color-variant-card {
+          background: #faf6f4;
+          border: 1px solid var(--stone-200);
+          border-radius: var(--radius-sm);
+          padding: 14px 16px;
+          margin-bottom: 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .variant-card-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding-bottom: 8px;
+          border-bottom: 1px solid var(--stone-200);
+        }
+        .variant-title { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--maroon-900); }
+        .variant-swatch-badge {
+          width: 16px;
+          height: 16px;
+          border-radius: 50%;
+          border: 1px solid rgba(0,0,0,0.15);
+          display: inline-block;
+        }
+        .btn-remove-variant {
+          background: none;
+          border: none;
+          font-size: 11.5px;
+          color: #a13a3a;
+          cursor: pointer;
+        }
+        .color-picker-row { display: flex; align-items: center; gap: 8px; }
+        .color-picker-input {
+          width: 36px;
+          height: 36px;
+          border-radius: 6px;
+          border: 1px solid var(--stone-200);
+          padding: 0;
+          cursor: pointer;
+        }
+        .color-hex-text { width: 90px !important; }
+        .preset-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 8px; }
+        .preset-label { font-size: 11px; color: var(--ink-400); }
+        .preset-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          background: #fff;
+          border: 1px solid var(--stone-200);
+          border-radius: 999px;
+          font-size: 11px;
+          padding: 3px 8px;
+          cursor: pointer;
+          color: var(--ink-700);
+          transition: border-color 0.15s;
+        }
+        .preset-chip:hover { border-color: var(--maroon-900); }
+        .preset-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .variant-photos-box {
+          background: #fff;
+          border: 1px dashed var(--stone-300);
+          border-radius: var(--radius-sm);
+          padding: 12px;
+          margin-top: 4px;
+        }
+        .variant-sub-label { font-size: 11.5px; font-weight: 600; color: var(--ink-600); margin-bottom: 8px; }
+        .variant-photos-row { display: flex; gap: 10px; flex-wrap: wrap; }
+        .variant-upload-btn {
+          display: inline-block;
+          font-size: 11.5px;
+          background: #faf7f5;
+          border: 1px solid var(--stone-300);
+          padding: 6px 12px;
+          border-radius: 6px;
+          cursor: pointer;
+          color: var(--maroon-900);
+          font-weight: 500;
+        }
+        .variant-upload-btn:hover { background: #f0eae6; }
+        .variant-cover-preview {
+          position: relative;
+          display: inline-block;
+          margin-top: 10px;
+          width: 64px;
+          height: 72px;
+          border-radius: 4px;
+          overflow: hidden;
+          border: 2px solid var(--maroon-900);
+        }
+        .variant-cover-preview img { width: 100%; height: 100%; object-fit: cover; }
+        .cover-tag {
+          position: absolute;
+          bottom: 2px;
+          left: 2px;
+          background: var(--maroon-900);
+          color: #fff;
+          font-size: 9px;
+          padding: 1px 4px;
+          border-radius: 2px;
+          font-weight: 600;
+        }
+        .row-colors-strip { display: flex; align-items: center; gap: 4px; margin-top: 3px; }
+        .row-color-dot { width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); display: inline-block; }
+        .row-colors-count { font-size: 10.5px; color: var(--ink-400); margin-left: 4px; }
+
         @media (max-width: 640px) {
           .form-row { grid-template-columns: 1fr; }
           .category-picker { flex-direction: column; }

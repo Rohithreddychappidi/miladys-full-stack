@@ -122,7 +122,12 @@ export default function Checkout() {
       await loadRazorpayScript();
 
       const orderPayload = {
-        items: items.map((i) => ({ productId: i.id, qty: i.qty })),
+        items: items.map((i) => ({
+          productId: i.id,
+          qty: i.qty,
+          color: i.color || undefined,
+          image: i.image || undefined,
+        })),
         address: {
           name: address.name,
           mobile: address.mobile,
@@ -270,16 +275,20 @@ export default function Checkout() {
 
             <h3 className="items-heading">Items</h3>
             <div className="checkout-items">
-              {items.map((item) => (
-                <div className="checkout-item" key={item.id}>
-                  <img src={item.image} alt={item.name} />
-                  <div>
-                    <p>{item.name}</p>
-                    <span>Qty {item.qty}</span>
+              {items.map((item) => {
+                const itemKey = item.key || (item.color ? `${item.id}__${item.color}` : item.id);
+                return (
+                  <div className="checkout-item" key={itemKey}>
+                    <img src={item.image} alt={item.name} />
+                    <div>
+                      <p>{item.name}</p>
+                      {item.color && <span className="checkout-item-color">Color: {item.color}</span>}
+                      <span>Qty {item.qty}</span>
+                    </div>
+                    <span className="item-total">{formatINR(item.price * item.qty)}</span>
                   </div>
-                  <span className="item-total">{formatINR(item.price * item.qty)}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -396,8 +405,9 @@ export default function Checkout() {
           padding: 10px 14px;
         }
         .checkout-item img { width: 52px; height: 64px; object-fit: cover; object-position: top center; border-radius: 4px; }
-        .checkout-item p { margin: 0 0 4px; font-size: 13px; }
-        .checkout-item span:not(.item-total) { font-size: 12px; color: var(--ink-400); }
+        .checkout-item p { margin: 0 0 2px; font-size: 13px; }
+        .checkout-item-color { font-size: 11px; color: var(--maroon-900); font-weight: 500; }
+        .checkout-item span:not(.item-total):not(.checkout-item-color) { font-size: 12px; color: var(--ink-400); }
         .item-total { font-size: 13px; font-weight: 600; color: var(--maroon-900); }
 
         .checkout-summary {

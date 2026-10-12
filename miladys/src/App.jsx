@@ -22,6 +22,9 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import CompleteProfile from './pages/CompleteProfile';
 import NotFound from './pages/NotFound';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import Terms from './pages/Terms';
+import ReturnRefundPolicy from './pages/ReturnRefundPolicy';
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminHome from './pages/admin/AdminHome';
@@ -55,6 +58,11 @@ function PublicSite() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/complete-profile" element={<RequireAuth><CompleteProfile /></RequireAuth>} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/terms-and-conditions" element={<Terms />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/return-policy" element={<ReturnRefundPolicy />} />
+          <Route path="/refund-policy" element={<ReturnRefundPolicy />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
