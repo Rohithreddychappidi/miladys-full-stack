@@ -1,6 +1,38 @@
 import { Router } from 'express';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { query } from '../db.js';
 import { requireAdmin } from '../middleware/auth.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadsDir = path.join(__dirname, '..', '..', 'uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+function processContentVideos(content) {
+  if (!content || typeof content !== 'object') return content;
+  const clone = JSON.parse(JSON.stringify(content));
+  for (const field of ['slides', 'mobileSlides']) {
+    if (Array.isArray(clone[field])) {
+      clone[field] = clone[field].map((s, idx) => {
+        if (s && s.url && typeof s.url === 'string' && s.url.startsWith('data:video/')) {
+          const match = /^data:video\/([a-zA-Z0-9]+);base64,(.+)$/.exec(s.url);
+          if (match) {
+            const ext = match[1] === 'quicktime' ? 'mov' : (match[1] || 'mp4');
+            const filename = `hero-video-${Date.now()}-${idx}.${ext}`;
+            const filePath = path.join(uploadsDir, filename);
+            const buffer = Buffer.from(match[2], 'base64');
+            fs.writeFileSync(filePath, buffer);
+            return { ...s, url: `/uploads/${filename}` };
+          }
+        }
+        return s;
+      });
+    }
+  }
+  return clone;
+}
 
 const router = Router();
 
@@ -42,6 +74,7 @@ router.get('/:key', async (req, res) => {
 
 router.put('/:key', requireAdmin, async (req, res) => {
   const { title, enabled, content, sortOrder } = req.body || {};
+  const processedContent = content !== undefined ? processContentVideos(content) : undefined;
   const { rows } = await query(
     `INSERT INTO home_sections (section_key, title, enabled, content, sort_order, updated_at)
      VALUES ($1,$2,$3, COALESCE($4::jsonb, '{}'::jsonb), $5, now())
@@ -52,12 +85,7 @@ router.put('/:key', requireAdmin, async (req, res) => {
        sort_order = COALESCE($5, home_sections.sort_order),
        updated_at = now()
      RETURNING *`,
-    // content is only passed through when the caller actually sent one —
-    // otherwise this stays NULL, so a brand-new row falls back to '{}' and
-    // an existing row keeps what it already had. This matters because a
-    // visibility toggle (enabled-only, no content) must never blank out a
-    // section's saved text/media.
-    [req.params.key, title ?? null, enabled ?? true, content !== undefined ? JSON.stringify(content) : null, sortOrder ?? 0]
+    [req.params.key, title ?? null, enabled ?? true, processedContent !== undefined ? JSON.stringify(processedContent) : null, sortOrder ?? 0]
   );
   res.json({ section: rows[0] });
 });

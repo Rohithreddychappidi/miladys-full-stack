@@ -22,29 +22,27 @@ import sharp from 'sharp';
 import { pool } from '../db.js';
 
 const MAX_DIMENSION = 1600;
-const QUALITY = 82;
-// Skip images already smaller than this — no point re-encoding something
-// that isn't part of the problem.
-const SKIP_UNDER_BYTES = 150 * 1024;
+const QUALITY = 78;
+// Skip images already in webp that are smaller than 40KB
+const SKIP_UNDER_BYTES = 40 * 1024;
 
 const DATA_URL_RE = /^data:image\/(png|jpe?g|jpg|webp|gif);base64,(.+)$/i;
 
 async function compressDataUrl(dataUrl, maxDimension = MAX_DIMENSION) {
   const match = DATA_URL_RE.exec(dataUrl);
   if (!match) return { value: dataUrl, changed: false }; // not a base64 image (e.g. already a hosted URL) — leave alone
+  const format = match[1].toLowerCase();
   const buffer = Buffer.from(match[2], 'base64');
-  if (buffer.byteLength < SKIP_UNDER_BYTES) return { value: dataUrl, changed: false };
+  if (format === 'webp' && buffer.byteLength < SKIP_UNDER_BYTES) return { value: dataUrl, changed: false };
 
   const out = await sharp(buffer)
     .resize({ width: maxDimension, height: maxDimension, fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: QUALITY })
+    .webp({ quality: QUALITY, effort: 4 })
     .toBuffer();
 
-  // Only keep the recompressed version if it's actually smaller — a tiny
-  // or already-efficient source image can occasionally come out larger
-  // after JPEG re-encoding, and there's no reason to keep that.
-  if (out.byteLength >= buffer.byteLength) return { value: dataUrl, changed: false };
-  return { value: `data:image/jpeg;base64,${out.toString('base64')}`, changed: true, before: buffer.byteLength, after: out.byteLength };
+  // Only keep the recompressed version if it's actually smaller or if converting to webp
+  if (out.byteLength >= buffer.byteLength && format === 'webp') return { value: dataUrl, changed: false };
+  return { value: `data:image/webp;base64,${out.toString('base64')}`, changed: true, before: buffer.byteLength, after: out.byteLength };
 }
 
 // Recursively walks any JSON-ish value (string / array / object) looking
@@ -80,14 +78,22 @@ async function compressValue(value, maxDimension, stats) {
 async function run() {
   const stats = { count: 0, bytesBefore: 0, bytesAfter: 0 };
 
-  // --- products: cover image + gallery array ---
-  const { rows: products } = await pool.query('SELECT id, image, images FROM products');
+  // --- products: cover image + gallery array + color variant photos ---
+  const { rows: products } = await pool.query('SELECT id, image, images, colors FROM products');
   for (const p of products) {
     const newImage = await compressValue(p.image, MAX_DIMENSION, stats);
     const newImages = await compressValue(p.images, MAX_DIMENSION, stats);
-    if (newImage !== p.image || JSON.stringify(newImages) !== JSON.stringify(p.images)) {
-      await pool.query('UPDATE products SET image = $1, images = $2::jsonb WHERE id = $3', [newImage, JSON.stringify(newImages), p.id]);
-      console.log(`  product ${p.id} updated`);
+    const newColors = await compressValue(p.colors, MAX_DIMENSION, stats);
+    if (
+      newImage !== p.image ||
+      JSON.stringify(newImages) !== JSON.stringify(p.images) ||
+      JSON.stringify(newColors) !== JSON.stringify(p.colors)
+    ) {
+      await pool.query(
+        'UPDATE products SET image = $1, images = $2::jsonb, colors = $3::jsonb WHERE id = $4',
+        [newImage, JSON.stringify(newImages), JSON.stringify(newColors), p.id]
+      );
+      console.log(`  product ${p.id} updated to WebP`);
     }
   }
 

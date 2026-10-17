@@ -169,7 +169,7 @@ export default function ProductDetail() {
     );
   }
 
-  if (!product || allProducts === null) {
+  if (!product) {
     return <div className="detail-page" style={{ minHeight: '100vh' }} />;
   }
 
@@ -347,7 +347,7 @@ export default function ProductDetail() {
       </div>
 
       <RecommendedProducts
-        products={allProducts}
+        products={allProducts || []}
         curatedIds={recommended.productIds}
         title={recommended.heading}
         excludeId={product.id}

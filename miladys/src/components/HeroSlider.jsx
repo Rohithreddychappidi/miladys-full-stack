@@ -50,6 +50,14 @@ export default function HeroSlider({ slides: cmsSlides, mobileSlides: cmsMobileS
     ? cmsMobileSlides
     : cmsSlides;
 
+const API_URL = import.meta.env.VITE_API_URL || 'https://api.themiladys.com';
+
+function resolveMediaUrl(src) {
+  if (!src) return '';
+  if (src.startsWith('/uploads/')) return `${API_URL}${src}`;
+  return src;
+}
+
   const slides = stillLoading
     ? loadingSlides
     : (Array.isArray(activeCmsSlides) && activeCmsSlides.length
@@ -60,7 +68,12 @@ export default function HeroSlider({ slides: cmsSlides, mobileSlides: cmsMobileS
       // DOM node after an admin uploaded a replacement, so the OLD video
       // kept playing for its full duration before the new one appeared.
       // Including the src makes React mount a fresh element instead.
-      ? activeCmsSlides.map((s, i) => ({ id: `${i}-${s.url}`, type: s.type, src: s.url, alt: 'Milady\'s' }))
+      ? activeCmsSlides.map((s, i) => ({
+          id: `${i}-${s.url}`,
+          type: s.type,
+          src: resolveMediaUrl(s.url),
+          alt: 'Milady\'s',
+        }))
       : defaultSlides);
 
   return isMobile

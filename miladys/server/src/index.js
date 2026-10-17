@@ -1,8 +1,16 @@
 import 'dotenv/config';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
 import express from 'express';
 import cors from 'cors';
 import { ensureSchema } from './db.js';
 import { attachUser } from './middleware/auth.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
 import authRoutes from './routes/auth.js';
 import categoryRoutes from './routes/categories.js';
@@ -47,9 +55,14 @@ app.use(attachUser);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-// Not under /api — sitemaps live at the domain root by convention, and the
-// frontend (Vercel) proxies /sitemap.xml to this exact path (see vercel.json).
 app.use(sitemapRoutes);
+
+app.use('/uploads', express.static(uploadsDir, {
+  maxAge: '30d',
+  setHeaders(res) {
+    res.setHeader('Accept-Ranges', 'bytes');
+  },
+}));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/categories', categoryRoutes);

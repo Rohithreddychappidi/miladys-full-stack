@@ -10,7 +10,7 @@ export default function ProductCard({ product, hidePrice = false }) {
   return (
     <Link to={`/products/${product.id}`} className={`product-card ${outOfStock ? 'is-out' : ''}`}>
       <div className="product-image">
-        <img src={product.image} alt={product.name} />
+        <img src={product.image} alt={product.name} loading="lazy" decoding="async" />
         {outOfStock && <span className="badge badge-out">Out of Stock</span>}
         {!hidePrice && !outOfStock && discount > 0 && <span className="badge badge-sale">{discount}% off</span>}
       </div>

@@ -75,7 +75,14 @@ function readFileAsDataUrl(file) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
-}function HeroSlidesEditor({ slides = [], onChange, sizeHint }) {
+}const API_URL = import.meta.env.VITE_API_URL || 'https://api.themiladys.com';
+function resolveMediaUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('/uploads/')) return `${API_URL}${url}`;
+  return url;
+}
+
+function HeroSlidesEditor({ slides = [], onChange, sizeHint }) {
   const photoInput = useRef(null);
   const videoInput = useRef(null);
   const [busy, setBusy] = useState(false);
@@ -122,14 +129,11 @@ function readFileAsDataUrl(file) {
       {slides.length > 0 && (
         <div className="slides-grid">
           {slides.map((s, i) => (
-            // Keyed by source, not index — a <video> whose src attribute
-            // changes doesn't reload, so index keys made the thumbnails
-            // show the wrong (previous) clip after removing a slide.
             <div className="slide-thumb" key={`${i}-${s.url?.slice(-32)}`}>
               {s.type === 'video' ? (
-                <video src={s.url} muted playsInline />
+                <video src={resolveMediaUrl(s.url)} muted playsInline />
               ) : (
-                <img src={s.url} alt="" />
+                <img src={resolveMediaUrl(s.url)} alt="" />
               )}
               <span className="slide-order-badge">{i + 1}</span>
               <span className="slide-type-badge">{s.type}</span>

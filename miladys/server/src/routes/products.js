@@ -22,7 +22,7 @@ router.get('/', async (req, res) => {
   const { rows } = category
     ? await query(`SELECT ${listColumns} FROM products WHERE active = true AND category_id = $1 ORDER BY created_at DESC`, [category])
     : await query(`SELECT ${listColumns} FROM products WHERE active = true ORDER BY created_at DESC`);
-  res.json({ products: rows.map(mapProduct) });
+  res.json({ products: rows.map(mapProductList) });
 });
 
 // GET /api/products/admin/all — every product regardless of active status,
@@ -97,6 +97,17 @@ router.delete('/:id', requireAdmin, async (req, res) => {
 
 function mapProduct(p) {
   return { ...p, category: p.category_id };
+}
+
+function mapProductList(p) {
+  const colors = Array.isArray(p.colors)
+    ? p.colors.map((c) => ({
+        name: c.name,
+        hex: c.hex,
+        stock: c.stock,
+      }))
+    : [];
+  return { ...p, category: p.category_id, colors };
 }
 
 export default router;
