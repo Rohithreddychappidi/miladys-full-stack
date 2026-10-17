@@ -33,7 +33,11 @@ export default function ProductDetail() {
   const [lightboxZoom, setLightboxZoom] = useState(1);
   const [panPos, setPanPos] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef({ x: 0, y: 0 });
+  // Touch/mouse gesture tracking for the lightbox (pinch, pan, swipe, double-tap).
+  const pointersRef = useRef(new Map());
+  const gestureRef = useRef({ mode: null, lastTap: 0 });
+  const lightboxImgRef = useRef(null);
+  const viewportRef = useRef(null);
 
   const { addItem } = useCart();
   const navigate = useNavigate();
@@ -161,24 +165,138 @@ export default function ProductDetail() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-  // Lightbox drag-to-pan handlers
-  function handleMouseDown(e) {
-    if (lightboxZoom <= 1) return;
+  // ---- Lightbox gestures (pointer events = mouse, touch and pen alike) ----
+  // Pinch: zoom 1x-4x. Drag: pan while zoomed (kept within the photo's
+  // edges). Double-tap (touch) / click (mouse): zoom in at that spot, or
+  // back out. Swipe left/right while not zoomed: next/previous photo.
+  const MAX_ZOOM = 4;
+
+  function clampPan(pan, zoom) {
+    const img = lightboxImgRef.current;
+    if (!img || zoom <= 1) return { x: 0, y: 0 };
+    const maxX = ((zoom - 1) * img.offsetWidth) / 2;
+    const maxY = ((zoom - 1) * img.offsetHeight) / 2;
+    return { x: Math.max(-maxX, Math.min(maxX, pan.x)), y: Math.max(-maxY, Math.min(maxY, pan.y)) };
+  }
+
+  // Zoom to `zoom`, keeping the screen point (clientX, clientY) where it is.
+  function zoomAt(zoom, clientX, clientY, fromZoom = lightboxZoom, fromPan = panPos) {
+    // Anything within 5% of 1x snaps back to exactly 1x, centred.
+    const next = zoom < 1.05 ? 1 : Math.min(MAX_ZOOM, zoom);
+    const img = lightboxImgRef.current;
+    if (!img || next === 1) {
+      setLightboxZoom(1);
+      setPanPos({ x: 0, y: 0 });
+      return;
+    }
+    const rect = viewportRef.current.getBoundingClientRect();
+    const ox = clientX - (rect.left + rect.width / 2);
+    const oy = clientY - (rect.top + rect.height / 2);
+    // Point under the finger, in unscaled image coordinates.
+    const ix = (ox - fromPan.x) / fromZoom;
+    const iy = (oy - fromPan.y) / fromZoom;
+    setLightboxZoom(next);
+    setPanPos(clampPan({ x: ox - ix * next, y: oy - iy * next }, next));
+  }
+
+  function showPhoto(step) {
+    if (gallery.length < 2) return;
+    const idx = gallery.indexOf(mainImage);
+    setActiveImage(gallery[(idx + step + gallery.length) % gallery.length]);
+    setLightboxZoom(1);
+    setPanPos({ x: 0, y: 0 });
+  }
+
+  function pinchInfo() {
+    const [a, b] = [...pointersRef.current.values()];
+    return { dist: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+  }
+
+  function startGesture() {
+    const g = gestureRef.current;
+    const pts = [...pointersRef.current.values()];
+    g.startZoom = lightboxZoom;
+    g.startPan = panPos;
+    if (pts.length >= 2) {
+      const { dist, cx, cy } = pinchInfo();
+      Object.assign(g, { mode: 'pinch', startDist: dist, cx, cy, moved: true });
+    } else if (pts.length === 1) {
+      Object.assign(g, { mode: lightboxZoom > 1 ? 'pan' : 'swipe', startX: pts[0].x, startY: pts[0].y, moved: false });
+    }
+  }
+
+  function handleViewportPointerDown(e) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
+    startGesture();
     setIsDragging(true);
-    dragStartRef.current = { x: e.clientX - panPos.x, y: e.clientY - panPos.y };
   }
 
-  function handleLightboxMouseMove(e) {
-    if (!isDragging || lightboxZoom <= 1) return;
-    setPanPos({
-      x: e.clientX - dragStartRef.current.x,
-      y: e.clientY - dragStartRef.current.y,
-    });
+  function handleViewportPointerMove(e) {
+    if (!pointersRef.current.has(e.pointerId)) return;
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
+    const g = gestureRef.current;
+    if (g.mode === 'pinch' && pointersRef.current.size >= 2) {
+      const { dist, cx, cy } = pinchInfo();
+      zoomAt(g.startZoom * (dist / g.startDist), cx, cy, g.startZoom, g.startPan);
+    } else if (g.mode === 'pan') {
+      const dx = e.clientX - g.startX;
+      const dy = e.clientY - g.startY;
+      if (Math.abs(dx) + Math.abs(dy) > 6) g.moved = true;
+      setPanPos(clampPan({ x: g.startPan.x + dx, y: g.startPan.y + dy }, lightboxZoom));
+    } else if (g.mode === 'swipe') {
+      if (Math.abs(e.clientX - g.startX) + Math.abs(e.clientY - g.startY) > 10) g.moved = true;
+    }
   }
 
-  function handleMouseUp() {
+  function handleViewportPointerUp(e) {
+    const pt = pointersRef.current.get(e.pointerId);
+    if (!pt) return;
+    pointersRef.current.delete(e.pointerId);
+    const g = gestureRef.current;
+
+    if (pointersRef.current.size > 0) {
+      // One finger lifted from a pinch: carry on panning with the other.
+      startGesture();
+      g.moved = true;
+      return;
+    }
     setIsDragging(false);
+
+    if (g.mode === 'swipe' && g.moved) {
+      const dx = e.clientX - g.startX;
+      const dy = e.clientY - g.startY;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) showPhoto(dx < 0 ? 1 : -1);
+    } else if (!g.moved && e.type === 'pointerup') {
+      // A tap: mouse click toggles zoom; on touch it takes a double-tap, so
+      // a single tap or the start of a swipe never zooms by accident.
+      const now = Date.now();
+      const isDoubleTap = now - g.lastTap < 300;
+      if (pt.type === 'mouse' || isDoubleTap) {
+        if (lightboxZoom > 1) { setLightboxZoom(1); setPanPos({ x: 0, y: 0 }); }
+        else zoomAt(2.5, e.clientX, e.clientY);
+        g.lastTap = 0;
+      } else {
+        g.lastTap = now;
+      }
+    }
+    g.mode = null;
   }
+
+  // Mouse wheel / trackpad pinch zoom (needs a non-passive listener to stop
+  // the page behind from scrolling).
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!lightboxOpen || !el) return undefined;
+    function onWheel(e) {
+      e.preventDefault();
+      const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0025));
+      zoomAt(lightboxZoom * factor, e.clientX, e.clientY);
+    }
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  });
 
   if (notFound) {
     return (
@@ -236,10 +354,10 @@ export default function ProductDetail() {
           <div
             ref={imageContainerRef}
             className={`detail-image ${isZooming ? 'zooming' : ''}`}
-            onMouseEnter={() => setIsZooming(true)}
-            onMouseLeave={() => setIsZooming(false)}
+            onPointerEnter={(e) => e.pointerType === 'mouse' && setIsZooming(true)}
+            onPointerLeave={() => setIsZooming(false)}
             onMouseMove={handleMouseMove}
-            onClick={() => { setLightboxOpen(true); setLightboxZoom(1); setPanPos({ x: 0, y: 0 }); }}
+            onClick={() => { setIsZooming(false); setLightboxOpen(true); setLightboxZoom(1); setPanPos({ x: 0, y: 0 }); }}
             role="button"
             tabIndex={0}
             aria-label="Click to inspect saree fabric and weave in full screen"
@@ -255,7 +373,8 @@ export default function ProductDetail() {
             />
             <div className="zoom-hint-badge">
               <span className="zoom-icon">🔍</span>
-              <span>Hover to zoom weave &middot; Click for full size</span>
+              <span className="hint-mouse">Hover to zoom weave &middot; Click for full size</span>
+              <span className="hint-touch">Tap to view full size &middot; Pinch to zoom the weave</span>
             </div>
           </div>
 
@@ -386,7 +505,10 @@ export default function ProductDetail() {
                 <button
                   type="button"
                   className="lightbox-btn"
-                  onClick={() => setLightboxZoom((z) => Math.min(3.5, z + 0.5))}
+                  onClick={() => {
+                    const r = viewportRef.current.getBoundingClientRect();
+                    zoomAt(lightboxZoom + 0.5, r.left + r.width / 2, r.top + r.height / 2);
+                  }}
                   title="Zoom In"
                   aria-label="Zoom in on fabric"
                 >
@@ -396,11 +518,8 @@ export default function ProductDetail() {
                   type="button"
                   className="lightbox-btn"
                   onClick={() => {
-                    setLightboxZoom((z) => {
-                      const next = Math.max(1, z - 0.5);
-                      if (next === 1) setPanPos({ x: 0, y: 0 });
-                      return next;
-                    });
+                    const r = viewportRef.current.getBoundingClientRect();
+                    zoomAt(lightboxZoom - 0.5, r.left + r.width / 2, r.top + r.height / 2);
                   }}
                   title="Zoom Out"
                   aria-label="Zoom out"
@@ -428,25 +547,29 @@ export default function ProductDetail() {
             </div>
 
             <div
+              ref={viewportRef}
               className={`lightbox-viewport ${lightboxZoom > 1 ? 'draggable' : ''}`}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleLightboxMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
+              onPointerDown={handleViewportPointerDown}
+              onPointerMove={handleViewportPointerMove}
+              onPointerUp={handleViewportPointerUp}
+              onPointerCancel={handleViewportPointerUp}
             >
               <img
+                ref={lightboxImgRef}
                 src={mainImage}
                 alt={product.name}
-                className="lightbox-image"
+                draggable={false}
+                className={`lightbox-image ${isDragging ? 'is-gesturing' : ''}`}
                 style={{
-                  transform: `scale(${lightboxZoom}) translate(${panPos.x / lightboxZoom}px, ${panPos.y / lightboxZoom}px)`,
+                  transform: `translate(${panPos.x}px, ${panPos.y}px) scale(${lightboxZoom})`,
                   cursor: lightboxZoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'zoom-in',
                 }}
-                onClick={() => {
-                  if (lightboxZoom === 1) setLightboxZoom(2.2);
-                  else { setLightboxZoom(1); setPanPos({ x: 0, y: 0 }); }
-                }}
               />
+              {lightboxZoom === 1 && (
+                <p className="lightbox-gesture-hint">
+                  {gallery.length > 1 ? 'Pinch or double-tap to zoom · Swipe for more photos' : 'Pinch or double-tap to zoom'}
+                </p>
+              )}
             </div>
 
             {gallery.length > 1 && (
@@ -454,12 +577,7 @@ export default function ProductDetail() {
                 <button
                   type="button"
                   className="lightbox-nav-btn prev"
-                  onClick={() => {
-                    const idx = gallery.indexOf(mainImage);
-                    setActiveImage(idx > 0 ? gallery[idx - 1] : gallery[gallery.length - 1]);
-                    setLightboxZoom(1);
-                    setPanPos({ x: 0, y: 0 });
-                  }}
+                  onClick={() => showPhoto(-1)}
                   aria-label="Previous photo"
                 >
                   ‹
@@ -467,12 +585,7 @@ export default function ProductDetail() {
                 <button
                   type="button"
                   className="lightbox-nav-btn next"
-                  onClick={() => {
-                    const idx = gallery.indexOf(mainImage);
-                    setActiveImage(idx < gallery.length - 1 ? gallery[idx + 1] : gallery[0]);
-                    setLightboxZoom(1);
-                    setPanPos({ x: 0, y: 0 });
-                  }}
+                  onClick={() => showPhoto(1)}
                   aria-label="Next photo"
                 >
                   ›
@@ -724,18 +837,48 @@ export default function ProductDetail() {
         .lightbox-viewport {
           flex: 1;
           width: 100%;
+          min-height: 0;
           display: flex;
           align-items: center;
           justify-content: center;
           overflow: hidden;
           position: relative;
+          /* All touch gestures here are ours (pinch/pan/swipe), not the browser's. */
+          touch-action: none;
+          overscroll-behavior: contain;
         }
         .lightbox-image {
           max-width: 85%;
           max-height: 80vh;
           object-fit: contain;
-          transition: transform 0.15s ease-out;
+          transform-origin: center center;
+          transition: transform 0.18s ease-out;
           user-select: none;
+          -webkit-user-drag: none;
+          will-change: transform;
+        }
+        /* Follow the finger exactly while a gesture is in progress. */
+        .lightbox-image.is-gesturing { transition: none; }
+        .lightbox-gesture-hint {
+          position: absolute;
+          bottom: 10px;
+          left: 50%;
+          transform: translateX(-50%);
+          margin: 0;
+          padding: 6px 12px;
+          border-radius: 999px;
+          background: rgba(0, 0, 0, 0.45);
+          color: rgba(255, 255, 255, 0.85);
+          font-size: 11.5px;
+          white-space: nowrap;
+          pointer-events: none;
+          display: none;
+        }
+        .hint-touch { display: none; }
+        @media (hover: none) {
+          .hint-mouse { display: none; }
+          .hint-touch { display: inline; }
+          .lightbox-gesture-hint { display: block; }
         }
         .lightbox-nav-btn {
           position: absolute;
@@ -781,6 +924,16 @@ export default function ProductDetail() {
         @media (max-width: 860px) {
           .detail-grid { grid-template-columns: 1fr; gap: 28px; margin-bottom: 40px; }
           .lightbox-nav-btn { display: none; }
+          /* Full-screen on phones: every pixel goes to the photo. */
+          .lightbox-overlay { padding: 0; }
+          .lightbox-content { height: 100vh; height: 100dvh; max-width: none; }
+          .lightbox-toolbar { padding: 10px 12px; gap: 10px; }
+          .lightbox-title { font-size: 12.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .lightbox-actions { gap: 6px; flex: none; }
+          .lightbox-btn { padding: 8px 12px; font-size: 14px; }
+          .lightbox-image { max-width: 100%; max-height: 100%; }
+          .lightbox-thumbs { padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); overflow-x: auto; max-width: 100%; }
+          .lightbox-thumb { flex: none; }
         }
       `}</style>
     </div>
