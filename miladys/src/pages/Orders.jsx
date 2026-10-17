@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import RecommendedProducts from '../components/RecommendedProducts';
 import Seo from '../components/Seo';
 import { api } from '../data/api';
+import { loadProductPool } from '../data/catalog';
 import { formatINR } from '../data/store';
 
 const statusTone = {
@@ -43,7 +44,7 @@ export default function Orders() {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
     api.getCancellationPolicy().then(({ policy }) => setPolicy(policy)).catch(() => {});
-    api.getProducts().then(({ products }) => setProducts(products)).catch(() => {});
+    loadProductPool().then(setProducts).catch(() => {});
   }, []);
 
   async function handleDownloadInvoice(order) {

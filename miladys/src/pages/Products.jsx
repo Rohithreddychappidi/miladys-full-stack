@@ -6,6 +6,14 @@ import Seo from '../components/Seo';
 import { api } from '../data/api';
 import { getCategories, getProducts } from '../data/store';
 
+const PAGE_SIZE = 12;
+
+// Sorts the API can do itself (so results can be fetched a page at a time).
+// "Name" and keyword search (which also matches descriptions) aren't
+// supported server-side, so those fetch the small, image-free list once
+// and filter/sort it here instead — still shown PAGE_SIZE at a time.
+const SERVER_SORT = { popular: 'newest', 'price-asc': 'price_asc', 'price-desc': 'price_desc' };
+
 const sortOptions = [
   { id: 'popular', label: 'Popularity' },
   { id: 'price-asc', label: 'Price: Low to High' },
@@ -17,6 +25,9 @@ export default function Products() {
   const location = useLocation();
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
   const activeCategory = searchParams.get('category') || 'all';
   const searchTerm = searchParams.get('search') || '';
@@ -27,24 +38,75 @@ export default function Products() {
   // all-products grid — same panel, just already open on arrival.
   const [filtersOpen, setFiltersOpen] = useState(!!location.state?.openFilters);
 
+  const serverPaged = !searchTerm.trim() && SERVER_SORT[sort] !== undefined;
+
   useEffect(() => {
     api.getCategories().then(({ categories }) => setCategories(categories)).catch(() => setCategories(getCategories()));
-    api.getProducts().then(({ products }) => setProducts(products)).catch(() => setProducts(getProducts()));
   }, []);
 
+  // (Re)load from page 1 whenever the category, sort or search changes.
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setPage(1);
+    const category = activeCategory !== 'all' ? activeCategory : undefined;
+    const request = serverPaged
+      ? api.getProducts({ category, sort: SERVER_SORT[sort], page: 1, limit: PAGE_SIZE })
+      : api.getProducts({ category });
+    request
+      .then((data) => {
+        if (!active) return;
+        setProducts(data.products);
+        setTotal(serverPaged ? data.total ?? data.products.length : data.products.length);
+      })
+      .catch(() => {
+        if (!active) return;
+        const fallback = getProducts().filter((p) => !category || p.category === category);
+        setProducts(fallback);
+        setTotal(fallback.length);
+      })
+      .finally(() => active && setLoading(false));
+    return () => { active = false; };
+  }, [activeCategory, sort, searchTerm, serverPaged]);
+
+  // Client-side filtering/sorting — only does anything for search and
+  // name-sort; server-paged results arrive already filtered and sorted.
   const filtered = useMemo(() => {
+    if (serverPaged) return products;
     let list = products;
-    if (activeCategory !== 'all') list = list.filter((p) => p.category === activeCategory);
     if (searchTerm.trim()) {
       const q = searchTerm.trim().toLowerCase();
-      list = list.filter((p) => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q));
+      list = list.filter((p) => p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q));
     }
     const sorted = [...list];
     if (sort === 'price-asc') sorted.sort((a, b) => a.price - b.price);
     else if (sort === 'price-desc') sorted.sort((a, b) => b.price - a.price);
     else if (sort === 'name') sorted.sort((a, b) => a.name.localeCompare(b.name));
     return sorted;
-  }, [products, activeCategory, searchTerm, sort]);
+  }, [products, searchTerm, sort, serverPaged]);
+
+  const visible = serverPaged ? filtered : filtered.slice(0, page * PAGE_SIZE);
+  const matchCount = serverPaged ? total : filtered.length;
+  const hasMore = visible.length < matchCount;
+
+  function loadMore() {
+    const next = page + 1;
+    if (!serverPaged) {
+      setPage(next);
+      return;
+    }
+    setLoading(true);
+    api
+      .getProducts({ category: activeCategory !== 'all' ? activeCategory : undefined, sort: SERVER_SORT[sort], page: next, limit: PAGE_SIZE })
+      .then((data) => {
+        // Skip anything already shown, in case the catalogue changed between pages.
+        setProducts((prev) => [...prev, ...data.products.filter((p) => !prev.some((x) => x.id === p.id))]);
+        setTotal(data.total ?? total);
+        setPage(next);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }
 
   function setCategory(id) {
     const next = new URLSearchParams(searchParams);
@@ -150,14 +212,26 @@ export default function Products() {
             )}
           </div>
 
-          {filtered.length === 0 ? (
-            <p className="empty">No sarees match this search — try another category or keyword.</p>
+          {visible.length === 0 ? (
+            loading
+              ? <p className="empty">Loading sarees…</p>
+              : <p className="empty">No sarees match this search — try another category or keyword.</p>
           ) : (
-            <div className="product-grid">
-              {filtered.map((p) => (
-                <ProductCard key={p.id} product={p} />
-              ))}
-            </div>
+            <>
+              <div className="product-grid">
+                {visible.map((p) => (
+                  <ProductCard key={p.id} product={p} />
+                ))}
+              </div>
+              <div className="load-more">
+                <p className="load-more-count">Showing {visible.length} of {matchCount}</p>
+                {hasMore && (
+                  <button type="button" className="btn btn-outline" onClick={loadMore} disabled={loading}>
+                    {loading ? 'Loading…' : 'Load more sarees'}
+                  </button>
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -245,6 +319,8 @@ export default function Products() {
           padding-bottom: 20px;
         }
         .empty { color: var(--ink-400); font-size: 14px; padding: 40px 0; }
+        .load-more { display: flex; flex-direction: column; align-items: center; gap: 14px; margin-top: 40px; }
+        .load-more-count { font-size: 12.5px; color: var(--ink-400); }
 
         @media (max-width: 980px) {
           .products-layout { grid-template-columns: 1fr; }

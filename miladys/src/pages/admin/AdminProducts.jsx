@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../../data/api';
 import { formatINR } from '../../data/store';
 import { compressImageFile } from '../../utils/compressImage';
+import { thumbUrl } from '../../utils/images';
 
 const emptyForm = { name: '', category: '', price: '', mrp: '', discountPercent: '', stock: '', description: '', image: '', images: [], colors: [], active: true };
 
@@ -44,6 +45,16 @@ function mrpFromDiscount(price, discountPercent) {
   return Math.round(p / (1 - pct / 100));
 }
 
+// Product photos are kept large enough for the fabric zoom on the product
+// page; the server makes the small thumbnails itself.
+const PRODUCT_PHOTO = { maxDimension: 2400, quality: 0.85 };
+
+const MATCH_REASON = {
+  'same name': 'Same name',
+  'same photo': 'Same photo',
+  'similar name': 'Similar name',
+};
+
 function stockTone(stock) {
   if (stock === 0) return 'stock-out';
   if (stock <= 5) return 'stock-low';
@@ -66,6 +77,13 @@ export default function AdminProducts() {
   const galleryInput = useRef(null);
   const [galleryBusy, setGalleryBusy] = useState(false);
   const [movingId, setMovingId] = useState(null);
+  const [uploading, setUploading] = useState(0); // photos still being uploaded
+  const [similar, setSimilar] = useState([]); // possible duplicates of what's being typed
+  // When editing: whether the full product (gallery + colours) loaded. If it
+  // didn't, those fields are left out of the save so they can't be wiped.
+  const [galleryLoaded, setGalleryLoaded] = useState(true);
+  const [listQuery, setListQuery] = useState('');
+  const [listCategory, setListCategory] = useState('');
 
   useEffect(() => {
     refresh();
@@ -78,10 +96,30 @@ export default function AdminProducts() {
     api.getAllProductsAdmin().then(({ products }) => setProducts(products)).catch((err) => setError(err.message));
   }
 
-  function handleImage(e) {
+  // Resizes a picked photo and uploads it straight away, returning its
+  // image URL — so saving the product sends a few short URLs instead of
+  // megabytes of photo data. If the upload itself fails, the resized photo
+  // is kept inline and the server converts it on save instead.
+  async function uploadPhoto(file) {
+    setUploading((n) => n + 1);
+    try {
+      const dataUrl = await compressImageFile(file, PRODUCT_PHOTO);
+      try {
+        const { url } = await api.uploadImage(dataUrl);
+        return url;
+      } catch {
+        return dataUrl;
+      }
+    } finally {
+      setUploading((n) => n - 1);
+    }
+  }
+
+  async function handleImage(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    compressImageFile(file).then((dataUrl) => setForm((f) => ({ ...f, image: dataUrl })));
+    const url = await uploadPhoto(file);
+    setForm((f) => ({ ...f, image: url }));
   }
 
   async function handleGalleryFiles(e) {
@@ -89,7 +127,7 @@ export default function AdminProducts() {
     if (!files.length) return;
     setGalleryBusy(true);
     try {
-      const added = await Promise.all(files.map((f) => compressImageFile(f)));
+      const added = await Promise.all(files.map((f) => uploadPhoto(f)));
       setForm((f) => ({ ...f, images: [...(f.images || []), ...added] }));
     } finally {
       setGalleryBusy(false);
@@ -127,14 +165,14 @@ export default function AdminProducts() {
 
   async function handleColorImage(idx, file) {
     if (!file) return;
-    const dataUrl = await compressImageFile(file);
-    updateColorVariant(idx, { image: dataUrl });
+    const url = await uploadPhoto(file);
+    updateColorVariant(idx, { image: url });
   }
 
   async function handleColorGalleryFiles(idx, files) {
     const fileList = Array.from(files || []);
     if (!fileList.length) return;
-    const added = await Promise.all(fileList.map((f) => compressImageFile(f)));
+    const added = await Promise.all(fileList.map((f) => uploadPhoto(f)));
     setForm((f) => ({
       ...f,
       colors: (f.colors || []).map((c, i) =>
@@ -155,6 +193,8 @@ export default function AdminProducts() {
   function resetForm() {
     setForm(emptyForm);
     setEditingId(null);
+    setGalleryLoaded(true);
+    setSimilar([]);
     pricingEditRef.current = null;
     if (fileInput.current) fileInput.current.value = '';
   }
@@ -214,9 +254,24 @@ export default function AdminProducts() {
     handlePricingFieldChange('price', value);
   }
 
+  // Live "this might already exist" check while adding/editing: same or
+  // similar name, or the very same cover photo.
+  useEffect(() => {
+    const name = form.name.trim();
+    if (name.length < 3 && !form.image) { setSimilar([]); return undefined; }
+    let active = true;
+    const timer = setTimeout(() => {
+      api.getSimilarProducts({ name, image: form.image, excludeId: editingId })
+        .then(({ matches }) => active && setSimilar(matches || []))
+        .catch(() => active && setSimilar([]));
+    }, 400);
+    return () => { active = false; clearTimeout(timer); };
+  }, [form.name, form.image, editingId]);
+
   async function handleSubmit(e) {
     e.preventDefault();
     if (!form.name.trim() || !form.category) return;
+    if (uploading > 0) return;
     setError('');
 
     const payload = {
@@ -231,17 +286,46 @@ export default function AdminProducts() {
       colors: form.colors || [],
       active: form.active !== false,
     };
+    // Gallery/colours never loaded for this edit — don't overwrite them.
+    if (editingId && !galleryLoaded) {
+      delete payload.images;
+      delete payload.colors;
+    }
 
     try {
       if (editingId) {
         await api.updateProduct(editingId, payload);
       } else {
-        await api.createProduct(payload);
+        try {
+          await api.createProduct(payload);
+        } catch (err) {
+          // The server blocks an exact duplicate (same name or same cover
+          // photo) unless we confirm it's intentional.
+          if (err.status !== 409) throw err;
+          if (!window.confirm(`${err.message}\n\nAdd it anyway as a separate product?`)) return;
+          await api.createProduct({ ...payload, allowDuplicate: true });
+        }
       }
       resetForm();
       refresh();
     } catch (err) {
       setError(err.message);
+    }
+  }
+
+  // Copies a product (details, photos, colours) as a hidden "(Copy)" and
+  // opens it for editing — the quick way to add the same design in a new
+  // colour or a close variant without re-entering everything.
+  async function handleDuplicate(product) {
+    setMovingId(product.id);
+    try {
+      const { product: copy } = await api.duplicateProduct(product.id);
+      refresh();
+      await handleEdit(copy);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setMovingId(null);
     }
   }
 
@@ -269,16 +353,21 @@ export default function AdminProducts() {
       active: product.active,
     });
     setEditingId(product.id);
+    setGalleryLoaded(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
     try {
-      const { product: full } = await api.getProduct(product.id);
+      // Admin endpoint: works for hidden products too (the public one 404s
+      // for them, which used to leave the gallery empty and wipe it on save).
+      const { product: full } = await api.getProductAdmin(product.id);
       setForm((f) => ({
         ...f,
+        image: full.image || f.image,
         images: f.images.length ? f.images : (full.images || []),
         colors: (f.colors && f.colors.length) ? f.colors : (full.colors || []),
       }));
+      setGalleryLoaded(true);
     } catch {
-      /* list data already populated the rest of the form; gallery just stays empty to edit */
+      setError('Could not load this product\'s gallery photos — saving will keep its existing photos unchanged.');
     }
   }
 
@@ -331,6 +420,10 @@ export default function AdminProducts() {
   }
 
   const stockNum = form.stock === '' ? null : Number(form.stock) || 0;
+  const listQueryLower = listQuery.trim().toLowerCase();
+  const listedProducts = products.filter((p) =>
+    (!listCategory || p.category === listCategory) &&
+    (!listQueryLower || p.name.toLowerCase().includes(listQueryLower) || p.id.toLowerCase().includes(listQueryLower)));
   const productsInCategory = form.category
     ? products.filter((p) => p.category === form.category && p.id !== editingId)
     : [];
@@ -361,6 +454,37 @@ export default function AdminProducts() {
               />
             </label>
 
+            {similar.length > 0 && (
+              <div className="similar-box" role="status">
+                <p className="similar-title">
+                  {similar.some((m) => m.reason !== 'similar name') ? 'This product may already exist' : 'Similar products already on the site'}
+                </p>
+                <div className="similar-list">
+                  {similar.map((m) => (
+                    <div className={`similar-item ${m.reason !== 'similar name' ? 'is-strong' : ''}`} key={m.id}>
+                      <img src={thumbUrl(m.image)} alt="" />
+                      <div className="similar-info">
+                        <strong>{m.name}</strong>
+                        <span>{MATCH_REASON[m.reason] || m.reason} · {categoryName(m.category)}{m.active === false ? ' · Hidden' : ''}</span>
+                      </div>
+                      {m.id !== editingId && (
+                        <button
+                          type="button"
+                          className="similar-edit"
+                          onClick={() => {
+                            const existing = products.find((p) => p.id === m.id);
+                            if (existing) handleEdit(existing);
+                          }}
+                        >
+                          Edit this
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="category-picker">
               <label>
                 Category
@@ -387,7 +511,7 @@ export default function AdminProducts() {
                     <div className="category-preview-list">
                       {productsInCategory.map((p) => (
                         <div className="category-preview-item" key={p.id}>
-                          <img src={p.image} alt="" />
+                          <img src={p.thumb || thumbUrl(p.image)} alt="" loading="lazy" />
                           <span>{p.name}</span>
                         </div>
                       ))}
@@ -445,6 +569,15 @@ export default function AdminProducts() {
             )}
           </div>
 
+          <label className="visible-toggle">
+            <input
+              type="checkbox"
+              checked={form.active !== false}
+              onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
+            />
+            <span>Visible on the store <em>(untick to keep it hidden while you finish it)</em></span>
+          </label>
+
           <div className="form-section">
             <p className="section-label">Photos</p>
             <label>
@@ -454,7 +587,7 @@ export default function AdminProducts() {
 
             {form.image && (
               <div className="preview-thumb">
-                <img src={form.image} alt="Preview" />
+                <img src={thumbUrl(form.image)} alt="Preview" />
               </div>
             )}
 
@@ -467,7 +600,7 @@ export default function AdminProducts() {
               <div className="gallery-grid">
                 {form.images.map((src, i) => (
                   <div className="gallery-thumb" key={i}>
-                    <img src={src} alt="" />
+                    <img src={thumbUrl(src)} alt="" />
                     <button type="button" className="gallery-remove" onClick={() => removeGalleryImage(i)} aria-label="Remove image">×</button>
                   </div>
                 ))}
@@ -598,7 +731,7 @@ export default function AdminProducts() {
                   {c.image && (
                     <div className="variant-cover-preview">
                       <span className="cover-tag">Cover</span>
-                      <img src={c.image} alt="Color cover" />
+                      <img src={thumbUrl(c.image)} alt="Color cover" />
                       <button
                         type="button"
                         className="gallery-remove"
@@ -613,7 +746,7 @@ export default function AdminProducts() {
                     <div className="gallery-grid" style={{ marginTop: 10 }}>
                       {c.images.map((src, photoIdx) => (
                         <div className="gallery-thumb" key={photoIdx}>
-                          <img src={src} alt="" />
+                          <img src={thumbUrl(src)} alt="" />
                           <button
                             type="button"
                             className="gallery-remove"
@@ -631,8 +764,8 @@ export default function AdminProducts() {
           </div>
 
           <div className="form-actions">
-            <button type="submit" className="btn btn-primary">
-              {editingId ? 'Save Changes' : 'Add Product'}
+            <button type="submit" className="btn btn-primary" disabled={uploading > 0}>
+              {uploading > 0 ? `Uploading ${uploading} photo${uploading === 1 ? '' : 's'}…` : editingId ? 'Save Changes' : 'Add Product'}
             </button>
             {editingId && (
               <button type="button" className="btn btn-outline" onClick={resetForm}>Cancel</button>
@@ -641,13 +774,30 @@ export default function AdminProducts() {
         </form>
 
         <div className="cms-list">
+          <div className="list-filters">
+            <input
+              type="search"
+              placeholder="Search products by name…"
+              value={listQuery}
+              onChange={(e) => setListQuery(e.target.value)}
+              aria-label="Search products"
+            />
+            <select value={listCategory} onChange={(e) => setListCategory(e.target.value)} aria-label="Filter by category">
+              <option value="">All categories</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <span className="list-count">{listedProducts.length} of {products.length}</span>
+          </div>
           {products.length === 0 && <p className="empty">No products yet.</p>}
-          {products.map((p) => {
+          {products.length > 0 && listedProducts.length === 0 && <p className="empty">No products match this search.</p>}
+          {listedProducts.map((p) => {
             const hasDiscount = p.mrp > p.price;
             const discountPct = hasDiscount ? Math.round(((p.mrp - p.price) / p.mrp) * 100) : 0;
             return (
               <div className={`cms-row ${p.active === false ? 'is-hidden' : ''}`} key={p.id}>
-                <img src={p.image} alt="" className="row-thumb-sq" />
+                <img src={p.thumb || thumbUrl(p.image)} alt="" className="row-thumb-sq" loading="lazy" />
                 <div className="row-info">
                   <strong>{p.name}</strong>
                   <span className="row-category">{categoryName(p.category)}</span>
@@ -690,6 +840,9 @@ export default function AdminProducts() {
                     ))}
                   </select>
                   <button onClick={() => handleEdit(p)}>Edit</button>
+                  <button onClick={() => handleDuplicate(p)} disabled={movingId === p.id} title="Copy this product (photos and colours included) as a hidden draft">
+                    Duplicate
+                  </button>
                   <button onClick={() => handleToggleActive(p)} disabled={movingId === p.id}>
                     {p.active === false ? 'Show' : 'Hide'}
                   </button>
@@ -706,6 +859,29 @@ export default function AdminProducts() {
         .admin-page-head h1 { font-size: 26px; margin-bottom: 8px; }
         .admin-page-head p { font-size: 13px; color: var(--ink-400); max-width: 560px; line-height: 1.6; }
         .admin-error { font-size: 12.5px; color: #a13a3a; margin-bottom: 16px; }
+
+        .similar-box { border: 1px solid #e8c9a8; background: #fdf6ee; border-radius: var(--radius-sm); padding: 10px 12px; }
+        .similar-title { font-size: 12px; font-weight: 600; color: #8a4b12; margin: 0 0 8px; }
+        .similar-list { display: flex; flex-direction: column; gap: 6px; }
+        .similar-item { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+        .similar-item img { width: 34px; height: 44px; object-fit: cover; border-radius: 4px; background: var(--stone-100); flex: none; }
+        .similar-item.is-strong strong { color: #a13a3a; }
+        .similar-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+        .similar-info strong { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .similar-info span { color: var(--ink-400); font-size: 11px; }
+        .similar-edit { font-size: 11.5px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--stone-200); background: var(--paper); cursor: pointer; flex: none; }
+
+        .cms-form label.visible-toggle { flex-direction: row; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-700, var(--ink-600)); }
+        .visible-toggle input { width: 16px; height: 16px; padding: 0; }
+        .visible-toggle em { color: var(--ink-400); font-style: normal; font-size: 11.5px; }
+
+        .list-filters { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+        .list-filters input, .list-filters select {
+          padding: 9px 12px; border-radius: var(--radius-sm); border: 1px solid var(--stone-200);
+          font-family: var(--font-body); font-size: 13px; background: var(--paper);
+        }
+        .list-filters input { flex: 1; min-width: 180px; }
+        .list-count { font-size: 12px; color: var(--ink-400); }
 
         .cms-layout {
           display: grid;
@@ -838,7 +1014,11 @@ export default function AdminProducts() {
         .stock-low { background: #fbeacb; color: #8a5a10; }
         .stock-out { background: #f6e3e3; color: #a13a3a; }
 
-        .row-actions { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+        /* min-width: 0 lets the list column shrink to the space it has, and the
+           buttons wrap instead of pushing the row past the edge of the page. */
+        .cms-list { min-width: 0; }
+        .cms-list .row-info { min-width: 170px; }
+        .row-actions { display: flex; align-items: center; gap: 4px 10px; flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; }
         .row-actions button { background: none; border: none; font-size: 12.5px; color: var(--maroon-900); }
         .row-actions .danger { color: #a13a3a; }
         .cms-row.is-hidden { opacity: 0.55; }

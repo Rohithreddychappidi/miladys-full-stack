@@ -9,6 +9,7 @@ import Seo, { SITE_NAME, SITE_URL } from '../components/Seo';
 import TestimonialBand from '../components/TestimonialBand';
 import TextReveal from '../components/TextReveal';
 import { api } from '../data/api';
+import { loadProductPool } from '../data/catalog';
 import { getCategories, getProducts } from '../data/store';
 
 const defaults = {
@@ -55,17 +56,32 @@ export default function Home() {
   const [story, setStory] = useState(defaults.story);
   const [promo, setPromo] = useState(null);
 
+  // The two product loads below can finish in either order, so each one
+  // merges into what's there rather than replacing it.
+  function addProducts(list) {
+    setProducts((prev) => {
+      const byId = new Map(prev.map((p) => [p.id, p]));
+      for (const p of list) byId.set(p.id, p);
+      return [...byId.values()].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    });
+  }
+
   useEffect(() => {
     // Categories & products — try the live backend first, fall back to the
     // local seed so the storefront still renders if the API isn't running.
     api.getCategories().then(({ categories }) => setCategories(categories)).catch(() => setCategories(getCategories()));
-    api.getProducts().then(({ products }) => setProducts(products)).catch(() => setProducts(getProducts()));
+    // Recent products first (for the default Featured/Recommended picks),
+    // then topped up with any admin-curated ids once the CMS sections say
+    // which those are.
+    loadProductPool().then(addProducts).catch(() => addProducts(getProducts()));
 
     // Home CMS sections — every block below is editable from the admin panel.
     api
       .getHomeSections()
       .then(({ sections }) => {
         const byKey = Object.fromEntries(sections.map((s) => [s.section_key, s.content]));
+        const curatedIds = [...(byKey.featured?.productIds || []), ...(byKey.recommended?.productIds || [])];
+        if (curatedIds.length) loadProductPool({ ids: curatedIds, limit: 0 }).then(addProducts).catch(() => {});
         if (byKey.hero) setHero({ ...defaults.hero, ...byKey.hero });
         if (byKey.showcase) setShowcase({ ...defaults.showcase, ...byKey.showcase });
         if (byKey.featured) setFeatured({ ...defaults.featured, ...byKey.featured });
@@ -184,7 +200,7 @@ export default function Home() {
         </div>
         <div className="container story-grid">
           <ScrollReveal as="div" className="story-image" y={0} duration={1.3}>
-            <img src={story.image} alt={story.heading} />
+            <img src={story.image} alt={story.heading} loading="lazy" decoding="async" />
           </ScrollReveal>
           <div className="story-copy">
             <TextReveal as="p" direction="fade" className="eyebrow">{story.eyebrow}</TextReveal>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
@@ -69,19 +69,21 @@ export default function Navbar() {
     setSearchOpen(false);
   }
 
-  // The product list for suggestions is fetched once, the first time the
-  // search bar is opened — not on every page load — and reused after that.
+  // Suggestions come from the server's name search (top 5), a moment after
+  // typing pauses — never the whole catalogue.
   useEffect(() => {
-    if (searchOpen && searchProducts === null) {
-      api.getProducts().then(({ products }) => setSearchProducts(products)).catch(() => setSearchProducts([]));
-    }
-  }, [searchOpen, searchProducts]);
+    const q = query.trim();
+    if (!searchOpen || !q) { setSearchProducts([]); return undefined; }
+    let active = true;
+    const timer = setTimeout(() => {
+      api.getProducts({ q, page: 1, limit: 5 })
+        .then(({ products }) => active && setSearchProducts(products))
+        .catch(() => active && setSearchProducts([]));
+    }, 250);
+    return () => { active = false; clearTimeout(timer); };
+  }, [query, searchOpen]);
 
-  const suggestions = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q || !searchProducts) return [];
-    return searchProducts.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 5);
-  }, [query, searchProducts]);
+  const suggestions = searchProducts || [];
 
   return (
     <header className={`navbar ${navClass}`}>

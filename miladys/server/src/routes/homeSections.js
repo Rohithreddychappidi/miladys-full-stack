@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { query } from '../db.js';
 import { requireAdmin } from '../middleware/auth.js';
+import { ingestFromRequest } from '../lib/images.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -74,7 +75,9 @@ router.get('/:key', async (req, res) => {
 
 router.put('/:key', requireAdmin, async (req, res) => {
   const { title, enabled, content, sortOrder } = req.body || {};
-  const processedContent = content !== undefined ? processContentVideos(content) : undefined;
+  const processedContent = content !== undefined
+    ? await ingestFromRequest(req, processContentVideos(content), { maxDimension: 2400 })
+    : undefined;
   const { rows } = await query(
     `INSERT INTO home_sections (section_key, title, enabled, content, sort_order, updated_at)
      VALUES ($1,$2,$3, COALESCE($4::jsonb, '{}'::jsonb), $5, now())

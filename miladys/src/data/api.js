@@ -14,7 +14,10 @@ export function setToken(token) {
 }
 
 async function request(path, { method = 'GET', body, auth = true } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
+  // Content-Type only when there's a body: on a plain GET it would make the
+  // browser send an extra CORS preflight (OPTIONS) round trip before every
+  // single API call.
+  const headers = body !== undefined ? { 'Content-Type': 'application/json' } : {};
   const token = getToken();
   if (auth && token) headers.Authorization = `Bearer ${token}`;
 
@@ -30,8 +33,37 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
   }
 
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+  if (!res.ok) {
+    // status + body are kept on the error so callers can react to specific
+    // cases (e.g. 409 "possible duplicate" when adding a product).
+    const err = new Error(data.error || 'Something went wrong.');
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
   return data;
+}
+
+// { category: 'x', page: 1, limit: 12 } -> "?category=x&page=1&limit=12"
+// (empty values skipped). A plain string is still treated as a category,
+// which is how older call sites use getProducts().
+function productQuery(params) {
+  if (!params) return '';
+  if (typeof params === 'string') params = { category: params };
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === '') continue;
+    qs.set(key, Array.isArray(value) ? value.join(',') : String(value));
+  }
+  const str = qs.toString();
+  return str ? `?${str}` : '';
+}
+
+// Our own uploaded images come back as absolute URLs; the duplicate check
+// compares stored paths ("/uploads/img/...").
+function uploadPath(url) {
+  if (!url || url.startsWith('data:')) return '';
+  try { return new URL(url, BASE_URL).pathname; } catch { return ''; }
 }
 
 // Separate from request() above because this response is a PDF file, not
@@ -87,12 +119,22 @@ export const api = {
   deleteCategory: (id) => request(`/api/categories/${id}`, { method: 'DELETE' }),
 
   // products
-  getProducts: (category) => request(`/api/products${category ? `?category=${category}` : ''}`, { auth: false }),
+  // params: { category, q, sort: newest|price_asc|price_desc, page, limit, exclude, ids }
+  // Without page/limit the API returns every matching product.
+  getProducts: (params) => request(`/api/products${productQuery(params)}`, { auth: false }),
   getAllProductsAdmin: () => request('/api/products/admin/all'),
   getProduct: (id) => request(`/api/products/${id}`, { auth: false }),
+  // Admin view of one product — works for hidden products too.
+  getProductAdmin: (id) => request(`/api/products/admin/${id}`),
+  getSimilarProducts: ({ name, image, excludeId }) =>
+    request(`/api/products/admin/similar${productQuery({ name, image: uploadPath(image), excludeId })}`),
+  duplicateProduct: (id) => request(`/api/products/${id}/duplicate`, { method: 'POST' }),
   createProduct: (payload) => request('/api/products', { method: 'POST', body: payload }),
   updateProduct: (id, payload) => request(`/api/products/${id}`, { method: 'PUT', body: payload }),
   deleteProduct: (id) => request(`/api/products/${id}`, { method: 'DELETE' }),
+
+  // Stores one photo (data URL) as an image file; returns { url, thumb }.
+  uploadImage: (dataUrl) => request('/api/uploads/image', { method: 'POST', body: { image: dataUrl } }),
 
   // home sections (CMS)
   getHomeSections: () => request('/api/home-sections', { auth: false }),

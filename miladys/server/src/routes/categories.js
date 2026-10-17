@@ -1,12 +1,15 @@
 import { Router } from 'express';
 import { query } from '../db.js';
 import { requireAdmin } from '../middleware/auth.js';
+import { ingestFromRequest, thumbPath } from '../lib/images.js';
 
 const router = Router();
 
 router.get('/', async (_req, res) => {
   const { rows } = await query('SELECT * FROM categories WHERE active = true ORDER BY sort_order ASC, created_at ASC');
-  res.json({ categories: rows });
+  // Category cards are ~200-240px wide, so the storefront gets the small
+  // variant; the admin list below keeps the full image.
+  res.json({ categories: rows.map((c) => ({ ...c, image: thumbPath(c.image) })) });
 });
 
 // GET /api/categories/admin/all — every category regardless of active
@@ -18,7 +21,7 @@ router.get('/admin/all', requireAdmin, async (_req, res) => {
 });
 
 router.post('/', requireAdmin, async (req, res) => {
-  const { id, name, image, tagline, sortOrder } = req.body || {};
+  const { id, name, image, tagline, sortOrder } = await ingestFromRequest(req, req.body || {}, { maxDimension: 1600 });
   if (!id?.trim() || !name?.trim()) return res.status(400).json({ error: 'id and name are required.' });
   const { rows } = await query(
     `INSERT INTO categories (id, name, image, tagline, sort_order) VALUES ($1,$2,$3,$4,$5)
@@ -29,7 +32,7 @@ router.post('/', requireAdmin, async (req, res) => {
 });
 
 router.put('/:id', requireAdmin, async (req, res) => {
-  const { name, image, tagline, sortOrder, active } = req.body || {};
+  const { name, image, tagline, sortOrder, active } = await ingestFromRequest(req, req.body || {}, { maxDimension: 1600 });
   const { rows } = await query(
     `UPDATE categories SET name = COALESCE($1,name), image = COALESCE($2,image),
        tagline = COALESCE($3,tagline), sort_order = COALESCE($4,sort_order),

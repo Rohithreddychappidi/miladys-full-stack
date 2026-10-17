@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { query } from '../db.js';
 import { requireAdmin } from '../middleware/auth.js';
+import { ingestFromRequest } from '../lib/images.js';
 
 const router = Router();
 
@@ -32,7 +33,7 @@ router.get('/admin/all', requireAdmin, async (_req, res) => {
 });
 
 router.post('/', requireAdmin, async (req, res) => {
-  const { productId, name, rating, text, photo, active, sortOrder } = req.body || {};
+  const { productId, name, rating, text, photo, active, sortOrder } = await ingestFromRequest(req, req.body || {}, { maxDimension: 800 });
   if (!name?.trim() || !text?.trim()) return res.status(400).json({ error: 'Name and testimonial text are required.' });
   const { rows } = await query(
     `INSERT INTO testimonials (product_id, name, rating, text, photo, active, sort_order)
@@ -43,7 +44,7 @@ router.post('/', requireAdmin, async (req, res) => {
 });
 
 router.put('/:id', requireAdmin, async (req, res) => {
-  const { productId, name, rating, text, photo, active, sortOrder } = req.body || {};
+  const { productId, name, rating, text, photo, active, sortOrder } = await ingestFromRequest(req, req.body || {}, { maxDimension: 800 });
   const { rows } = await query(
     `UPDATE testimonials SET
        product_id = $1, name = COALESCE($2,name), rating = COALESCE($3,rating),

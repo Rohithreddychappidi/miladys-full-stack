@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { api } from '../data/api';
 import { formatINR } from '../data/store';
+import { thumbUrl } from '../utils/images';
 
 const emptyAddress = { name: '', mobile: '', line1: '', city: '', state: '', pincode: '' };
 
@@ -279,7 +280,7 @@ export default function Checkout() {
                 const itemKey = item.key || (item.color ? `${item.id}__${item.color}` : item.id);
                 return (
                   <div className="checkout-item" key={itemKey}>
-                    <img src={item.image} alt={item.name} />
+                    <img src={thumbUrl(item.image)} alt={item.name} />
                     <div>
                       <p>{item.name}</p>
                       {item.color && <span className="checkout-item-color">Color: {item.color}</span>}

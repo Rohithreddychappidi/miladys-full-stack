@@ -3,6 +3,7 @@ import RecommendedProducts from '../components/RecommendedProducts';
 import Seo from '../components/Seo';
 import { useCart } from '../context/CartContext';
 import { formatINR } from '../data/store';
+import { thumbUrl } from '../utils/images';
 
 export default function Cart() {
   const { items, updateQty, removeItem, subtotal } = useCart();
@@ -29,7 +30,7 @@ export default function Cart() {
                 return (
                   <div className="cart-row" key={itemKey}>
                     <Link to={`/products/${item.id}`} className="cart-thumb">
-                      <img src={item.image} alt={item.name} />
+                      <img src={thumbUrl(item.image)} alt={item.name} />
                     </Link>
                     <div className="cart-item-info">
                       <Link to={`/products/${item.id}`} className="cart-item-name">{item.name}</Link>

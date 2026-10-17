@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import BottomNav from './components/BottomNav';
@@ -9,33 +10,57 @@ import SmoothScroll from './components/SmoothScroll';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import Home from './pages/Home';
-import About from './pages/About';
 import Products from './pages/Products';
 import ProductDetail from './pages/ProductDetail';
-import Orders from './pages/Orders';
-import Contact from './pages/Contact';
-import Cart from './pages/Cart';
-import Checkout from './pages/Checkout';
-import Profile from './pages/Profile';
-import Login from './pages/Login';
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
-import CompleteProfile from './pages/CompleteProfile';
-import NotFound from './pages/NotFound';
-import PrivacyPolicy from './pages/PrivacyPolicy';
-import Terms from './pages/Terms';
-import ReturnRefundPolicy from './pages/ReturnRefundPolicy';
-import AdminLayout from './pages/admin/AdminLayout';
-import AdminDashboard from './pages/admin/AdminDashboard';
-import AdminHome from './pages/admin/AdminHome';
-import AdminAbout from './pages/admin/AdminAbout';
-import AdminCoupons from './pages/admin/AdminCoupons';
-import AdminCancellationPolicy from './pages/admin/AdminCancellationPolicy';
-import AdminCategories from './pages/admin/AdminCategories';
-import AdminProducts from './pages/admin/AdminProducts';
-import AdminOrders from './pages/admin/AdminOrders';
-import AdminReviews from './pages/admin/AdminReviews';
-import AdminTestimonials from './pages/admin/AdminTestimonials';
+
+// Pages other than the main shopping ones load on demand, so first-time
+// visitors don't download the admin panel, checkout, policies etc. up front.
+// If a chunk can't be fetched (typically: a new deploy replaced it while
+// this tab was open), reload once to pick up the current build.
+function lazyPage(load) {
+  return lazy(() =>
+    load().catch((err) => {
+      const key = 'miladys_chunk_reload';
+      if (!sessionStorage.getItem(key)) {
+        sessionStorage.setItem(key, '1');
+        window.location.reload();
+        return new Promise(() => {});
+      }
+      throw err;
+    }).then((mod) => {
+      sessionStorage.removeItem('miladys_chunk_reload');
+      return mod;
+    }),
+  );
+}
+
+const About = lazyPage(() => import('./pages/About'));
+const Orders = lazyPage(() => import('./pages/Orders'));
+const Contact = lazyPage(() => import('./pages/Contact'));
+const Cart = lazyPage(() => import('./pages/Cart'));
+const Checkout = lazyPage(() => import('./pages/Checkout'));
+const Profile = lazyPage(() => import('./pages/Profile'));
+const Login = lazyPage(() => import('./pages/Login'));
+const ForgotPassword = lazyPage(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazyPage(() => import('./pages/ResetPassword'));
+const CompleteProfile = lazyPage(() => import('./pages/CompleteProfile'));
+const NotFound = lazyPage(() => import('./pages/NotFound'));
+const PrivacyPolicy = lazyPage(() => import('./pages/PrivacyPolicy'));
+const Terms = lazyPage(() => import('./pages/Terms'));
+const ReturnRefundPolicy = lazyPage(() => import('./pages/ReturnRefundPolicy'));
+const AdminLayout = lazyPage(() => import('./pages/admin/AdminLayout'));
+const AdminDashboard = lazyPage(() => import('./pages/admin/AdminDashboard'));
+const AdminHome = lazyPage(() => import('./pages/admin/AdminHome'));
+const AdminAbout = lazyPage(() => import('./pages/admin/AdminAbout'));
+const AdminCoupons = lazyPage(() => import('./pages/admin/AdminCoupons'));
+const AdminCancellationPolicy = lazyPage(() => import('./pages/admin/AdminCancellationPolicy'));
+const AdminCategories = lazyPage(() => import('./pages/admin/AdminCategories'));
+const AdminProducts = lazyPage(() => import('./pages/admin/AdminProducts'));
+const AdminOrders = lazyPage(() => import('./pages/admin/AdminOrders'));
+const AdminReviews = lazyPage(() => import('./pages/admin/AdminReviews'));
+const AdminTestimonials = lazyPage(() => import('./pages/admin/AdminTestimonials'));
+
+const pageFallback = <div className="page-loading" style={{ minHeight: '70vh' }} aria-busy="true" />;
 
 function PublicSite() {
   return (
@@ -44,6 +69,7 @@ function PublicSite() {
       <LogoIntro />
       <Navbar />
       <main>
+        <Suspense fallback={pageFallback}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<About />} />
@@ -65,6 +91,7 @@ function PublicSite() {
           <Route path="/refund-policy" element={<ReturnRefundPolicy />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </Suspense>
       </main>
       <Footer />
       <BottomNav />
@@ -80,6 +107,7 @@ export default function App() {
     return (
       <AuthProvider>
         <ScrollToTop />
+        <Suspense fallback={pageFallback}>
         <Routes>
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
@@ -95,6 +123,7 @@ export default function App() {
             <Route path="*" element={<AdminDashboard />} />
           </Route>
         </Routes>
+        </Suspense>
       </AuthProvider>
     );
   }

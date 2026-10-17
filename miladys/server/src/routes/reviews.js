@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { query } from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { ingestFromRequest } from '../lib/images.js';
 
 const router = Router();
 
@@ -23,7 +24,10 @@ router.post('/products/:productId/reviews', requireAuth, async (req, res) => {
   const { rating, comment, photos } = req.body || {};
   const r = Number(rating);
   if (!r || r < 1 || r > 5) return res.status(400).json({ error: 'Rating must be between 1 and 5.' });
-  const cleanPhotos = Array.isArray(photos) ? photos.slice(0, 3) : [];
+  // Customer photos: only uploaded images (data URLs, or files already
+  // stored via /api/uploads/image) — never arbitrary external URLs.
+  const cleanPhotos = (await ingestFromRequest(req, Array.isArray(photos) ? photos.slice(0, 3) : [], { maxDimension: 1600 }))
+    .filter((p) => typeof p === 'string' && p.startsWith('/uploads/img/'));
 
   const { rows } = await query(
     `INSERT INTO reviews (product_id, user_id, rating, comment, photos) VALUES ($1,$2,$3,$4,$5::jsonb)

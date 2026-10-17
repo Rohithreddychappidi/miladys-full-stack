@@ -4,6 +4,7 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { razorpay, razorpayEnabled, verifyPaymentSignature } from '../lib/razorpay.js';
 import { sendOrderConfirmationEmail, sendCancellationEmail } from '../lib/email.js';
 import { renderInvoice } from '../lib/invoice.js';
+import { ingestFromRequest, thumbPath } from '../lib/images.js';
 import { findUsableCoupon, computeDiscount } from './coupons.js';
 import { findApplicableTier } from './cancellationPolicy.js';
 
@@ -45,12 +46,15 @@ router.post('/create', requireAuth, async (req, res) => {
     if (!p) return res.status(400).json({ error: `Product ${productId} not found.` });
     if (p.stock < qty) return res.status(400).json({ error: `${p.name} is out of stock.` });
     subtotal += p.price * qty;
-    let itemImage = chosenImage;
-    if (!itemImage && color && Array.isArray(p.colors)) {
-      const match = p.colors.find((c) => c.name === color);
-      if (match?.image) itemImage = match.image;
-    }
-    lineItems.push({ product: p, qty, color: color || null, image: itemImage || p.image });
+    // The line-item photo is whatever the customer was looking at (e.g. a
+    // colour variant), but only if it's genuinely one of this product's own
+    // photos — never store an arbitrary client-supplied string.
+    const colorMatch = color && Array.isArray(p.colors) ? p.colors.find((c) => c.name === color) : null;
+    const ownPhotos = [p.image, ...(p.images || []), ...(p.colors || []).flatMap((c) => [c.image, ...(c.images || [])])]
+      .filter(Boolean);
+    const chosenPath = await ingestFromRequest(req, typeof chosenImage === 'string' && !chosenImage.startsWith('data:') ? chosenImage : '');
+    const itemImage = ownPhotos.includes(chosenPath) ? chosenPath : (colorMatch?.image || p.image);
+    lineItems.push({ product: p, qty, color: color || null, image: thumbPath(itemImage) });
   }
 
   // Re-validate the coupon server-side rather than trusting a discount

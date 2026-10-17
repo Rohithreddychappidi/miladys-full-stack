@@ -8,6 +8,8 @@ import Seo, { SITE_URL } from '../components/Seo';
 import { useCart } from '../context/CartContext';
 import { api } from '../data/api';
 import { formatINR, getProducts } from '../data/store';
+import { loadProductPool } from '../data/catalog';
+import { thumbUrl } from '../utils/images';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -38,11 +40,15 @@ export default function ProductDetail() {
 
   useEffect(() => {
     let active = true;
-    api.getProducts().then(({ products }) => active && setAllProducts(products)).catch(() => active && setAllProducts([]));
-    api.getHomeSection('recommended').then(({ section }) => {
-      if (!active) return;
-      if (section?.content) setRecommended((prev) => ({ ...prev, ...section.content }));
-    }).catch(() => {});
+    api.getHomeSection('recommended')
+      .then(({ section }) => {
+        if (!active) return null;
+        if (section?.content) setRecommended((prev) => ({ ...prev, ...section.content }));
+        return loadProductPool({ ids: section?.content?.productIds || [] });
+      })
+      .catch(() => loadProductPool())
+      .then((pool) => active && pool && setAllProducts(pool))
+      .catch(() => active && setAllProducts([]));
     return () => { active = false; };
   }, []);
 
@@ -94,6 +100,20 @@ export default function ProductDetail() {
   const basePhotos = [product?.image, ...(product?.images || [])].filter(Boolean);
   const gallery = (colorPhotos.length > 0 ? colorPhotos : basePhotos).filter((src, i, arr) => arr.indexOf(src) === i);
   const mainImage = activeImage || gallery[0] || product?.image;
+
+  // Show the small thumbnail straight away, then swap in the full-size
+  // photo (needed for the fabric zoom) once it has downloaded — the page
+  // no longer waits on a large image before anything appears.
+  const [loadedFull, setLoadedFull] = useState(null);
+  useEffect(() => {
+    if (!mainImage || thumbUrl(mainImage) === mainImage) return undefined;
+    let active = true;
+    const img = new Image();
+    img.onload = () => active && setLoadedFull(mainImage);
+    img.src = mainImage;
+    return () => { active = false; };
+  }, [mainImage]);
+  const displayImage = loadedFull === mainImage ? mainImage : thumbUrl(mainImage);
 
   // Handle color change
   function handleSelectColor(colorObj) {
@@ -225,8 +245,9 @@ export default function ProductDetail() {
             aria-label="Click to inspect saree fabric and weave in full screen"
           >
             <img
-              src={mainImage}
+              src={displayImage}
               alt={product.name}
+              fetchPriority="high"
               style={{
                 transformOrigin: `${zoomOrigin.x}% ${zoomOrigin.y}%`,
                 transform: isZooming ? 'scale(2.4)' : 'scale(1)',
@@ -248,7 +269,7 @@ export default function ProductDetail() {
                   onClick={() => setActiveImage(src)}
                   aria-label={`View photo ${i + 1}`}
                 >
-                  <img src={src} alt="" />
+                  <img src={thumbUrl(src)} alt="" loading="lazy" decoding="async" />
                 </button>
               ))}
             </div>
@@ -465,7 +486,7 @@ export default function ProductDetail() {
                       className={`lightbox-thumb ${src === mainImage ? 'active' : ''}`}
                       onClick={() => { setActiveImage(src); setLightboxZoom(1); setPanPos({ x: 0, y: 0 }); }}
                     >
-                      <img src={src} alt="" />
+                      <img src={thumbUrl(src)} alt="" />
                     </button>
                   ))}
                 </div>
