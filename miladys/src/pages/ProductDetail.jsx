@@ -131,6 +131,16 @@ export default function ProductDetail() {
 
   const [shareNote, setShareNote] = useState('');
 
+  // Category names for the breadcrumb (Home > Category > Product).
+  const [categoryNames, setCategoryNames] = useState({});
+  useEffect(() => {
+    let active = true;
+    api.getCategories()
+      .then(({ categories }) => active && setCategoryNames(Object.fromEntries(categories.map((c) => [c.id, c.name]))))
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
   // Sticky "Add to Cart" bar on phones: shown once the real buttons have
   // scrolled up out of view, hidden again when they come back.
   const actionsRef = useRef(null);
@@ -392,6 +402,24 @@ export default function ProductDetail() {
     setAdded(true);
   }
 
+  // e.g. "bridal-sarees" -> "Bridal Sarees" when the category isn't in the public list (hidden).
+  const categoryLabel = product.category
+    ? categoryNames[product.category] || product.category.replace(/[-_]+/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase())
+    : '';
+  const breadcrumbs = (extraClass) => (
+    <nav className={`detail-breadcrumbs ${extraClass}`} aria-label="Breadcrumb">
+      <Link to="/" className="breadcrumb-link">Home</Link>
+      {categoryLabel && (
+        <>
+          <span className="breadcrumb-sep" aria-hidden="true">&gt;</span>
+          <Link to={`/products?category=${encodeURIComponent(product.category)}`} className="breadcrumb-link">{categoryLabel}</Link>
+        </>
+      )}
+      <span className="breadcrumb-sep" aria-hidden="true">&gt;</span>
+      <span className="breadcrumb-current" aria-current="page">{product.name}</span>
+    </nav>
+  );
+
   const productUrl = `${SITE_URL}/products/${product.id}`;
   const productLabel = selectedColor?.name ? `${product.name} (${selectedColor.name})` : product.name;
   const whatsappHref = whatsapp
@@ -423,7 +451,15 @@ export default function ProductDetail() {
         description={(product.description || `${product.name} — handwoven saree from Milady's.`).slice(0, 160)}
         image={ogImage}
         type="product"
-        jsonLd={{
+        jsonLd={[{
+          '@context': 'https://schema.org',
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE_URL}/` },
+            ...(categoryLabel ? [{ '@type': 'ListItem', position: 2, name: categoryLabel, item: `${SITE_URL}/products?category=${encodeURIComponent(product.category)}` }] : []),
+            { '@type': 'ListItem', position: categoryLabel ? 3 : 2, name: product.name, item: `${SITE_URL}/products/${product.id}` },
+          ],
+        }, {
           '@context': 'https://schema.org',
           '@type': 'Product',
           name: product.name,
@@ -439,12 +475,14 @@ export default function ProductDetail() {
               ? 'https://schema.org/OutOfStock'
               : 'https://schema.org/InStock',
           },
-        }}
+        }]}
       />
       <div className="sparkle-bg sparkle-bg-detail" aria-hidden="true">
         <img src="/images/sparkle-bg.svg" alt="" />
       </div>
 
+      {/* Phones: breadcrumb first, above the photo (on desktop it sits above the title). */}
+      <div className="container">{breadcrumbs('breadcrumbs-mobile')}</div>
       <div className="container detail-grid">
         {/* Gallery with Interactive Fabric Zoom */}
         <div className="detail-gallery">
@@ -494,14 +532,9 @@ export default function ProductDetail() {
           )}
         </div>
 
-        {/* Product Info with Breadcrumbs without Category */}
+        {/* Product info (breadcrumb shown here on desktop) */}
         <div className="detail-info">
-          {/* Breadcrumbs without category: Home > Product name */}
-          <nav className="detail-breadcrumbs" aria-label="Breadcrumb">
-            <Link to="/" className="breadcrumb-link">Home</Link>
-            <span className="breadcrumb-sep" aria-hidden="true">&gt;</span>
-            <span className="breadcrumb-current" aria-current="page">{product.name}</span>
-          </nav>
+          {breadcrumbs('breadcrumbs-desktop')}
 
           <h1>{product.name}</h1>
           <div className="detail-price">
@@ -811,7 +844,7 @@ export default function ProductDetail() {
         .detail-thumb:hover { opacity: 1; }
         .detail-thumb.active { border-color: var(--maroon-900); opacity: 1; }
 
-        /* Breadcrumbs without categories: Home > Product name */
+        /* Breadcrumbs: Home > Category > Product */
         .detail-breadcrumbs {
           display: flex;
           align-items: center;
@@ -836,6 +869,13 @@ export default function ProductDetail() {
         .breadcrumb-current {
           color: var(--ink-800);
           font-weight: 500;
+        }
+        .detail-breadcrumbs.breadcrumbs-mobile { display: none; }
+        @media (max-width: 860px) {
+          .detail-breadcrumbs.breadcrumbs-desktop { display: none; }
+          .detail-breadcrumbs.breadcrumbs-mobile { display: flex; margin: -8px 0 14px; row-gap: 2px; }
+          /* comfortable tap targets on phones */
+          .breadcrumbs-mobile .breadcrumb-link { padding: 8px 0; }
         }
 
         .detail-info h1 { font-size: 30px; margin-bottom: 14px; color: var(--maroon-950); }

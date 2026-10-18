@@ -246,7 +246,7 @@ function MobileHeroSlider({ slides }) {
 
   return (
     <div className="hero-slider hero-slider-mobile" aria-hidden="true">
-      <div className="hero-track" ref={trackRef}>
+      <div className={`hero-track ${slides.length === 1 ? 'is-single' : ''}`} ref={trackRef}>
         {slides.map((s) => (
           <div key={s.id} className="hero-slide-mobile">
             {s.type === 'video' ? (
@@ -357,15 +357,23 @@ function HeroSliderStyles() {
       }
       .hero-dot.active { background: var(--ivory); width: 20px; border-radius: 999px; }
 
+      /* Sideways-only strip. overflow-y must be hidden explicitly: with
+         overflow-x: auto the browser otherwise makes it a vertical scroll
+         box too, and a few px of extra height there meant an upward swipe
+         on the video scrolled the strip instead of the page. */
       .hero-track {
         display: flex;
         width: 100%;
         height: 100%;
         overflow-x: auto;
+        overflow-y: hidden;
+        overscroll-behavior-x: contain;
+        touch-action: pan-x pan-y;
         scroll-snap-type: x mandatory;
-        -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
       }
+      /* One slide: nothing to swipe to, so no scroll box at all. */
+      .hero-track.is-single { overflow: hidden; }
       .hero-track::-webkit-scrollbar { display: none; }
       .hero-slide-mobile {
         flex: 0 0 100%;
@@ -376,6 +384,7 @@ function HeroSliderStyles() {
       }
       .hero-slide-mobile img,
       .hero-slide-mobile video {
+        display: block; /* inline media leaves a gap below that overflowed the strip */
         width: 100%;
         height: 100%;
         object-fit: cover;

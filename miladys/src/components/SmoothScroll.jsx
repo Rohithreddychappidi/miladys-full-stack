@@ -80,10 +80,39 @@ export default function SmoothScroll() {
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
     if (lenisRef.current) {
-      lenisRef.current.scrollTo(0, { immediate: true });
+      lenisRef.current.scrollTo(0, { immediate: true, force: true });
     } else {
       window.scrollTo(0, 0);
     }
+
+    // A trackpad/mouse flick keeps sending wheel events for up to a second
+    // ("momentum"). If a product was clicked mid-glide, that leftover
+    // momentum used to carry on scrolling the NEW page (it landed ~650px
+    // down). Wheel events that continue the glide without a pause are
+    // swallowed; the first one after a 150ms gap is a fresh, deliberate
+    // scroll and goes through. Uses each event's own timestamp, so a busy
+    // main thread rendering the new page can't fake a "pause". Capped at 3s
+    // (a strong macOS trackpad glide lasts up to ~2s).
+    let lastWheel = performance.now();
+    let done = false;
+    function stopSwallowing() {
+      if (done) return;
+      done = true;
+      clearTimeout(capTimer);
+      window.removeEventListener('wheel', swallow, { capture: true });
+    }
+    function swallow(e) {
+      if (e.timeStamp - lastWheel > 150) {
+        stopSwallowing();
+        return; // new gesture: let it scroll normally
+      }
+      lastWheel = e.timeStamp;
+      e.preventDefault();
+      e.stopImmediatePropagation(); // keep it from Lenis too
+    }
+    window.addEventListener('wheel', swallow, { capture: true, passive: false });
+    const capTimer = setTimeout(stopSwallowing, 3000);
+    return stopSwallowing;
   }, [pathname]);
 
   return null;
