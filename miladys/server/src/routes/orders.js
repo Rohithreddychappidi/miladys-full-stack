@@ -139,17 +139,41 @@ router.post('/verify', requireAuth, async (req, res) => {
     signature: razorpay_signature,
   });
   if (!valid) {
-    await query(`UPDATE orders SET status = 'failed' WHERE razorpay_order_id = $1`, [razorpay_order_id]);
+    // Only the customer's own order, and only while it's still awaiting
+    // payment — a bad signature must never downgrade a paid or cancelled one.
+    await query(
+      `UPDATE orders SET status = 'failed' WHERE razorpay_order_id = $1 AND user_id = $2 AND status = 'created'`,
+      [razorpay_order_id, req.user.id]
+    );
     return res.status(400).json({ error: 'Payment verification failed.' });
   }
 
+  // Mark paid only if the order is still awaiting payment ('created', or
+  // 'failed' after an earlier bad attempt). Doing the check inside the same
+  // UPDATE makes it atomic, so a confirmation that's sent twice (or
+  // replayed later — e.g. after the order was cancelled and refunded)
+  // can't mark it paid again or take the stock a second time.
   const { rows } = await query(
     `UPDATE orders SET status = 'paid', razorpay_payment_id = $1, paid_at = now()
-     WHERE razorpay_order_id = $2 AND user_id = $3 RETURNING *`,
+     WHERE razorpay_order_id = $2 AND user_id = $3 AND status IN ('created', 'failed') RETURNING *`,
     [razorpay_payment_id, razorpay_order_id, req.user.id]
   );
   const order = rows[0];
-  if (!order) return res.status(404).json({ error: 'Order not found.' });
+  if (!order) {
+    const { rows: existing } = await query(
+      'SELECT * FROM orders WHERE razorpay_order_id = $1 AND user_id = $2',
+      [razorpay_order_id, req.user.id]
+    );
+    const current = existing[0];
+    if (!current) return res.status(404).json({ error: 'Order not found.' });
+    // Same payment confirmed twice (double-sent by the browser): already
+    // done, so just report success without repeating any side effects.
+    if ((current.status === 'paid' || current.status === 'paid_oversold') && current.razorpay_payment_id === razorpay_payment_id) {
+      const { rows: items } = await query('SELECT * FROM order_items WHERE order_id = $1', [current.id]);
+      return res.json({ ok: true, order: current, items });
+    }
+    return res.status(409).json({ error: 'This order can no longer be confirmed — it was already completed or cancelled.' });
+  }
 
   const { rows: items } = await query('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
 
