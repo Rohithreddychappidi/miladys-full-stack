@@ -35,6 +35,20 @@ router.post('/create', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'A complete shipping address is required.' });
   }
 
+  // Quantities come from the browser: each must be a whole number 1–10.
+  // (A negative quantity used to lower the order total — and the payment
+  // step then ADDED stock for it.)
+  const MAX_QTY = 10;
+  const wanted = {};
+  for (const item of items) {
+    const n = Number(item.qty);
+    if (!Number.isInteger(n) || n < 1 || n > MAX_QTY) {
+      return res.status(400).json({ error: `Please choose a quantity between 1 and ${MAX_QTY}.` });
+    }
+    item.qty = n;
+    wanted[item.productId] = (wanted[item.productId] || 0) + n;
+  }
+
   const productIds = items.map((i) => i.productId);
   const { rows: products } = await query('SELECT * FROM products WHERE id = ANY($1) AND active = true', [productIds]);
   const byId = Object.fromEntries(products.map((p) => [p.id, p]));
@@ -44,7 +58,8 @@ router.post('/create', requireAuth, async (req, res) => {
   for (const { productId, qty, color, image: chosenImage } of items) {
     const p = byId[productId];
     if (!p) return res.status(400).json({ error: `Product ${productId} not found.` });
-    if (p.stock < qty) return res.status(400).json({ error: `${p.name} is out of stock.` });
+    // Total across every cart line for this saree (e.g. two colours of it).
+    if (p.stock < wanted[productId]) return res.status(400).json({ error: `${p.name} is out of stock.` });
     subtotal += p.price * qty;
     // The line-item photo is whatever the customer was looking at (e.g. a
     // colour variant), but only if it's genuinely one of this product's own
@@ -266,6 +281,18 @@ router.post('/:id/cancel', requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // Flip to cancelled only if it's still paid — checked inside the UPDATE
+    // so two cancel requests arriving together can't both go through (which
+    // would put the stock back twice and send two refunds).
+    const { rows: flipped } = await client.query(
+      `UPDATE orders SET status = 'cancelled', cancelled_at = now(), refund_percent = $1, refund_amount = $2
+       WHERE id = $3 AND status IN ('paid', 'paid_oversold') RETURNING id`,
+      [tier.refund_percent, refundAmount, order.id]
+    );
+    if (!flipped.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'This order has already been cancelled.' });
+    }
     // Put the stock back — exactly the units this order took. An oversold
     // line took fewer than it ordered (see /verify); orders paid before
     // stock_reserved existed have NULL there and fall back to qty.
@@ -273,10 +300,6 @@ router.post('/:id/cancel', requireAuth, async (req, res) => {
       const back = item.stock_reserved ?? item.qty;
       if (back > 0) await client.query('UPDATE products SET stock = stock + $1 WHERE id = $2', [back, item.product_id]);
     }
-    await client.query(
-      `UPDATE orders SET status = 'cancelled', cancelled_at = now(), refund_percent = $1, refund_amount = $2 WHERE id = $3`,
-      [tier.refund_percent, refundAmount, order.id]
-    );
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
