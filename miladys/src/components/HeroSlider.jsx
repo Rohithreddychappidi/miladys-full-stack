@@ -154,6 +154,10 @@ function DesktopHeroSlider({ slides }) {
                 muted
                 playsInline
                 autoPlay
+                // A single video replays forever; with several slides it
+                // ends and the slider moves on. (Without loop, a lone video
+                // stopped and froze on its last frame: "next" was itself.)
+                loop={slides.length === 1}
                 preload="auto"
                 onEnded={handleVideoEnded}
                 onLoadedData={() => setVideoReady(true)}
