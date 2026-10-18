@@ -213,6 +213,11 @@ CREATE TABLE IF NOT EXISTS order_items (
 );
 
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS color TEXT;
+-- How many units this line actually took out of product stock when the
+-- payment was confirmed: normally qty, but fewer (often 0) when the order
+-- was oversold. Cancelling puts back exactly this many. NULL on orders
+-- paid before this column existed (treated as qty, the old behaviour).
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS stock_reserved INTEGER;
 
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);
