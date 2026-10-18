@@ -218,18 +218,28 @@ export default function TestimonialBand() {
           bottom: 18px;
           left: 56px;
           display: flex;
-          gap: 6px;
+          gap: 0;
         }
+        /* Each button is a full 24px tap target; the small dot is drawn inside it. */
         .band-dots button {
+          width: 24px;
+          height: 24px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          background: none;
+          border: none;
+          padding: 0;
+        }
+        .band-dots button::before {
+          content: '';
           width: 6px;
           height: 6px;
           border-radius: 999px;
           background: var(--stone-200);
-          border: none;
-          padding: 0;
           transition: background 0.2s ease, width 0.2s ease;
         }
-        .band-dots button.active { background: var(--maroon-900); width: 18px; }
+        .band-dots button.active::before { background: var(--maroon-900); width: 18px; }
 
         @media (max-width: 640px) {
           .band-box {

@@ -124,7 +124,7 @@ export default function ReviewsCarousel({ productId }) {
     <section className="reviews-block">
       <div className="reviews-head">
         <div>
-          <h3>Customer Reviews</h3>
+          <h2>Customer Reviews</h2>
           {summary.count > 0 ? (
             <div className="summary-line">
               <Stars value={Math.round(summary.average)} readOnly size={15} />
@@ -211,7 +211,7 @@ export default function ReviewsCarousel({ productId }) {
       <style>{`
         .reviews-block { margin-top: 44px; padding-top: 36px; border-top: 1px solid var(--stone-200); }
         .reviews-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
-        .reviews-head h3 { font-family: var(--font-display); font-size: 20px; color: var(--maroon-900); margin: 0 0 8px; }
+        .reviews-head h2 { font-family: var(--font-display); font-size: 20px; color: var(--maroon-900); margin: 0 0 8px; }
         .summary-line { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-600); }
         .no-reviews { font-size: 13px; color: var(--ink-400); margin: 0; }
 

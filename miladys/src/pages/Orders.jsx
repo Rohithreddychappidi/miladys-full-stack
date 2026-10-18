@@ -174,7 +174,8 @@ export default function Orders() {
         )}
       </div>
 
-      <RecommendedProducts products={products} title="Shop Again" />
+      {/* After the orders, so it doesn't appear first and then get pushed down. */}
+      {!loading && <RecommendedProducts products={products} title="Shop Again" />}
 
       <style>{`
         .orders-page { padding: 56px 0 0; }

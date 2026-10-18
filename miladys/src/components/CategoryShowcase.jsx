@@ -216,7 +216,7 @@ export default function CategoryShowcase({ categories, note, heading }) {
                 style={{ animationDelay: `${Math.min(i % count, 6) * 70}ms` }}
               >
                 <div className="showcase-card-lift">
-                  <img src={c.image} alt="" />
+                  <img src={c.image} alt="" loading="lazy" decoding="async" />
                   <span className="showcase-card-overlay" />
                   <span className="showcase-card-name">{c.name}</span>
                 </div>
@@ -255,7 +255,7 @@ export default function CategoryShowcase({ categories, note, heading }) {
                   }}
                 >
                   <div className="showcase-card-lift">
-                    <img src={c.image} alt="" />
+                    <img src={c.image} alt="" loading="lazy" decoding="async" />
                     <span className="showcase-card-overlay" />
                     <span className="showcase-card-name">{c.name}</span>
                   </div>

@@ -341,8 +341,10 @@ export default function ProductDetail() {
   if (notFound) {
     return (
       <div className="container" style={{ padding: '80px 32px' }}>
-        <p>We couldn&apos;t find that saree.</p>
-        <Link to="/products" className="btn btn-outline" style={{ marginTop: 16 }}>Back to products</Link>
+        <Seo title="Saree not found" path={`/products/${id}`} noindex />
+        <h1 style={{ fontSize: 26, marginBottom: 10 }}>Saree not found</h1>
+        <p>This saree may have sold out or been removed from the collection.</p>
+        <Link to="/products" className="btn btn-outline" style={{ marginTop: 16 }}>Browse all sarees</Link>
       </div>
     );
   }
@@ -366,7 +368,7 @@ export default function ProductDetail() {
           .detail-page { padding: 56px 0 0; }
           .detail-skeleton { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; margin-bottom: 70px; }
           .skel {
-            background: linear-gradient(90deg, var(--stone-100) 25%, #f3eee8 37%, var(--stone-100) 63%);
+            background: linear-gradient(90deg, var(--placeholder) 25%, #e9e2db 37%, var(--placeholder) 63%);
             background-size: 400% 100%;
             animation: skel-shimmer 1.3s ease-in-out infinite;
             border-radius: var(--radius-sm);
@@ -453,9 +455,11 @@ export default function ProductDetail() {
             onPointerLeave={() => setIsZooming(false)}
             onMouseMove={handleMouseMove}
             onClick={() => { setIsZooming(false); setLightboxOpen(true); setLightboxZoom(1); setPanPos({ x: 0, y: 0 }); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setLightboxOpen(true); setLightboxZoom(1); setPanPos({ x: 0, y: 0 }); }
+            }}
             role="button"
             tabIndex={0}
-            aria-label="Click to inspect saree fabric and weave in full screen"
           >
             <img
               src={displayImage}
@@ -915,10 +919,10 @@ export default function ProductDetail() {
         .ask-whatsapp {
           display: inline-flex; align-items: center; gap: 8px;
           padding: 10px 16px; border-radius: 999px;
-          background: #1f8f4e; color: #fff; font-size: 13px; font-weight: 500;
+          background: #177a41; color: #fff; font-size: 13px; font-weight: 500;
           transition: background 0.2s;
         }
-        .ask-whatsapp:hover { background: #18773f; }
+        .ask-whatsapp:hover { background: #126434; }
         .ask-whatsapp svg { width: 18px; height: 18px; flex: none; }
         .share-btn {
           display: inline-flex; align-items: center; gap: 6px;

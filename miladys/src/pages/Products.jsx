@@ -171,6 +171,11 @@ export default function Products() {
                   </button>
                 </li>
               ))}
+              {/* Placeholder rows while categories load, so the "Sort By"
+                  block below doesn't jump down when they arrive. */}
+              {categories.length === 0 && Array.from({ length: 14 }, (_, i) => (
+                <li key={`ph-${i}`} aria-hidden="true"><span className="category-placeholder" /></li>
+              ))}
             </ul>
           </div>
 
@@ -214,7 +219,17 @@ export default function Products() {
 
           {visible.length === 0 ? (
             loading
-              ? <p className="empty">Loading sarees…</p>
+              ? (
+                <div className="product-grid" aria-busy="true" aria-label="Loading sarees">
+                  {Array.from({ length: 6 }, (_, i) => (
+                    <div className="card-placeholder" key={i}>
+                      <div className="card-placeholder-img" />
+                      <div className="card-placeholder-line" />
+                      <div className="card-placeholder-line short" />
+                    </div>
+                  ))}
+                </div>
+              )
               : <p className="empty">No sarees match this search — try another category or keyword.</p>
           ) : (
             <>
@@ -292,6 +307,15 @@ export default function Products() {
         }
         .category-list button:hover { color: var(--maroon-900); }
         .category-list button.active { color: var(--maroon-900); font-weight: 600; }
+        .category-placeholder { display: block; height: 14px; width: 70%; margin: 9.5px 0; border-radius: 4px; background: var(--placeholder); }
+        .card-placeholder-img { aspect-ratio: 3 / 4; border-radius: var(--radius-sm); background: var(--placeholder); }
+        .card-placeholder-line { height: 13px; width: 80%; margin-top: 14px; border-radius: 4px; background: var(--placeholder); }
+        .card-placeholder-line.short { width: 40%; margin-top: 8px; }
+        .card-placeholder-img, .card-placeholder-line, .category-placeholder { animation: placeholder-pulse 1.4s ease-in-out infinite; }
+        @keyframes placeholder-pulse { 50% { opacity: 0.55; } }
+        @media (prefers-reduced-motion: reduce) {
+          .card-placeholder-img, .card-placeholder-line, .category-placeholder { animation: none; }
+        }
 
         .sort-options { display: flex; flex-direction: column; gap: 10px; }
         .sort-option { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--ink-600); }

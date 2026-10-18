@@ -12,10 +12,11 @@
   --ivory: #fffdfb;
   --paper: #ffffff;
   --stone-100: #ffffff;
+  --placeholder: #f2ede8; /* loading placeholders (stone-100 is white, so invisible on the page) */
   --stone-200: #ece2dc;
   --ink-900: #241a17;
   --ink-600: #6b5c56;
-  --ink-400: #9c8d87;
+  --ink-400: #806f69; /* was #9c8d87 (3.2:1 on white); now 4.8:1 for readable secondary text */
 
   --font-display: 'Marcellus', 'Cormorant Garamond', serif;
   --font-script: 'Cormorant Garamond', serif;
@@ -171,3 +172,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
 }
+
+/* Page content always takes at least a full screen, so the footer starts
+   below the fold instead of appearing mid-screen and jumping down as each
+   page's data loads (that jump was the main layout-shift problem). */
+#root > main { min-height: 100vh; }

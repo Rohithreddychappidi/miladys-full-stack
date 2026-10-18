@@ -37,7 +37,7 @@ export default function Footer() {
     <footer className="site-footer">
       <div className="container footer-grid">
         <div className="footer-brand">
-          <img src="/images/logo-white.png" alt="Milady's" className="footer-logo" />
+          <img src="/images/logo-white.png" alt="Milady's" className="footer-logo" width="98" height="34" loading="lazy" />
           <p>Premium sarees, handpicked for the woman who wears tradition her own way.</p>
 
           <div className="social-links">
@@ -76,7 +76,7 @@ export default function Footer() {
         </div>
 
         <div className="footer-col">
-          <h4>Explore</h4>
+          <h2>Explore</h2>
           <Link to="/products">Products</Link>
           <Link to="/about">About Us</Link>
           <Link to="/orders">Orders</Link>
@@ -84,14 +84,14 @@ export default function Footer() {
         </div>
 
         <div className="footer-col">
-          <h4>Policies</h4>
+          <h2>Policies</h2>
           <Link to="/privacy-policy">Privacy Policy</Link>
           <Link to="/terms-and-conditions">Terms &amp; Conditions</Link>
           <Link to="/return-policy">Return &amp; Refund Policy</Link>
         </div>
 
         <div className="footer-col">
-          <h4>Reach Us</h4>
+          <h2>Reach Us</h2>
           <a href="tel:+917842225444">+91 78422 25444</a>
           <a href="mailto:themiladysofficial@gmail.com">themiladysofficial@gmail.com</a>
           <p className="addr">Flat No. 402, JM&apos;s CNR Tower,<br />Srinagar, Kakinada, A.P. 533003</p>
@@ -99,7 +99,7 @@ export default function Footer() {
         </div>
 
         <div className="footer-col">
-          <h4>Store Hours</h4>
+          <h2>Store Hours</h2>
           <p>Mon – Sat: 10am – 9pm</p>
           <p>Sunday: 10am – 7pm</p>
         </div>
@@ -155,7 +155,7 @@ export default function Footer() {
         }
         .social-link svg { width: 16px; height: 16px; }
         .social-link:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.5); }
-        .footer-col h4 {
+        .footer-col h2 {
           font-family: var(--font-body);
           color: var(--ivory);
           font-size: 12px;
