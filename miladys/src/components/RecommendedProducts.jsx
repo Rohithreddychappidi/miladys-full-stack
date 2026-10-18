@@ -1,4 +1,6 @@
+import { useEffect, useMemo, useState } from 'react';
 import ProductCard from './ProductCard';
+import { loadProductPool } from '../data/catalog';
 import ScrollReveal from './ScrollReveal';
 import TextReveal from './TextReveal';
 
@@ -9,15 +11,32 @@ function pickRandom(products, count, excludeId) {
   return shuffled.slice(0, count);
 }
 
-// `products` is the already-fetched live catalog (passed down from the
-// page, not fetched here — see Home.jsx / ProductDetail.jsx). `curatedIds`
-// is the admin's hand-picked list from the "Recommended Sarees" section in
-// /admin/home, in the order they set it; when empty, falls back to a
-// random pick from the real catalog, same as before.
-export default function RecommendedProducts({ products = [], curatedIds = [], excludeId, title = 'Recommended For You' }) {
-  const picked = curatedIds.length > 0
-    ? curatedIds.map((id) => products.find((p) => p.id === id)).filter((p) => p && p.id !== excludeId)
-    : pickRandom(products, 4, excludeId);
+// `products` is a list the page already fetched (Home, ProductDetail,
+// Orders). Pages that don't pass one (Cart, Checkout, Products, About,
+// Contact, Profile) get a small pool of recent products fetched here —
+// before, those strips silently rendered nothing. `curatedIds` is the
+// admin's hand-picked list from /admin/home, in their order; when empty,
+// it's a random pick.
+export default function RecommendedProducts({ products, curatedIds = [], excludeId, title = 'Recommended For You' }) {
+  const [ownPool, setOwnPool] = useState([]);
+  const selfLoad = products === undefined;
+  useEffect(() => {
+    if (!selfLoad) return undefined;
+    let active = true;
+    loadProductPool({ ids: curatedIds }).then((pool) => active && setOwnPool(pool)).catch(() => {});
+    return () => { active = false; };
+    // curatedIds only matters on first load; re-fetching on every render's new [] would loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selfLoad]);
+  const source = selfLoad ? ownPool : products;
+
+  // Picked once per product list, so the strip doesn't reshuffle on every re-render.
+  const picked = useMemo(() => (
+    curatedIds.length > 0
+      ? curatedIds.map((id) => source.find((p) => p.id === id)).filter((p) => p && p.id !== excludeId)
+      : pickRandom(source.filter((p) => Number(p.stock) !== 0), 4, excludeId)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [source, excludeId, curatedIds.join(',')]);
 
   if (picked.length === 0) return null;
 

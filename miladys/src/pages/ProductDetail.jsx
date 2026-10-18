@@ -119,6 +119,46 @@ export default function ProductDetail() {
   }, [mainImage]);
   const displayImage = loadedFull === mainImage ? mainImage : thumbUrl(mainImage);
 
+  // Store WhatsApp number (Admin → Home Page → Footer links), for "Ask on WhatsApp".
+  const [whatsapp, setWhatsapp] = useState('');
+  useEffect(() => {
+    let active = true;
+    api.getHomeSection('social_links')
+      .then(({ section }) => active && setWhatsapp(String(section?.content?.whatsapp || '').replace(/\D/g, '')))
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  const [shareNote, setShareNote] = useState('');
+
+  // Sticky "Add to Cart" bar on phones: shown once the real buttons have
+  // scrolled up out of view, hidden again when they come back.
+  const actionsRef = useRef(null);
+  const [showStickyBar, setShowStickyBar] = useState(false);
+  // A plain (rAF-throttled) scroll check rather than IntersectionObserver:
+  // a fast fling can jump straight from "below the screen" to "above it",
+  // which an observer never reports.
+  useEffect(() => {
+    if (!product) return undefined;
+    let frame = 0;
+    function update() {
+      frame = 0;
+      const el = actionsRef.current;
+      if (el) setShowStickyBar(el.getBoundingClientRect().bottom < 0);
+    }
+    function onScroll() {
+      if (!frame) frame = requestAnimationFrame(update);
+    }
+    update();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [product]);
+
   // Handle color change
   function handleSelectColor(colorObj) {
     setSelectedColor(colorObj);
@@ -308,7 +348,39 @@ export default function ProductDetail() {
   }
 
   if (!product) {
-    return <div className="detail-page" style={{ minHeight: '100vh' }} />;
+    return (
+      <div className="detail-page" aria-busy="true" aria-label="Loading saree">
+        <div className="container detail-grid detail-skeleton">
+          <div className="skel skel-image" />
+          <div>
+            <div className="skel skel-line" style={{ width: '30%' }} />
+            <div className="skel skel-title" />
+            <div className="skel skel-line" style={{ width: '25%', height: 22 }} />
+            <div className="skel skel-line" />
+            <div className="skel skel-line" style={{ width: '85%' }} />
+            <div className="skel skel-line" style={{ width: '60%' }} />
+            <div className="skel skel-button" />
+          </div>
+        </div>
+        <style>{`
+          .detail-page { padding: 56px 0 0; }
+          .detail-skeleton { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; margin-bottom: 70px; }
+          .skel {
+            background: linear-gradient(90deg, var(--stone-100) 25%, #f3eee8 37%, var(--stone-100) 63%);
+            background-size: 400% 100%;
+            animation: skel-shimmer 1.3s ease-in-out infinite;
+            border-radius: var(--radius-sm);
+          }
+          .skel-image { aspect-ratio: 3 / 4; border-radius: var(--radius-md); }
+          .skel-title { height: 34px; width: 70%; margin: 14px 0 18px; }
+          .skel-line { height: 14px; width: 100%; margin-bottom: 12px; }
+          .skel-button { height: 48px; width: 60%; margin-top: 28px; border-radius: 999px; }
+          @keyframes skel-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+          @media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+          @media (max-width: 860px) { .detail-skeleton { grid-template-columns: 1fr; gap: 28px; } }
+        `}</style>
+      </div>
+    );
   }
 
   const ogImage = mainImage?.startsWith('http') ? mainImage : undefined;
@@ -316,6 +388,29 @@ export default function ProductDetail() {
   function handleAdd() {
     addItem(product, qty, selectedColor?.name, mainImage);
     setAdded(true);
+  }
+
+  const productUrl = `${SITE_URL}/products/${product.id}`;
+  const productLabel = selectedColor?.name ? `${product.name} (${selectedColor.name})` : product.name;
+  const whatsappHref = whatsapp
+    ? `https://wa.me/${whatsapp}?text=${encodeURIComponent(`Hi Milady's, I'd like to know more about ${productLabel} — ${productUrl}`)}`
+    : '';
+
+  // Phone share sheet where available; otherwise copy the link.
+  async function handleShare() {
+    const data = { title: product.name, text: `${productLabel} at Milady's`, url: productUrl };
+    try {
+      if (navigator.share) {
+        await navigator.share(data);
+        return;
+      }
+      await navigator.clipboard.writeText(productUrl);
+      setShareNote('Link copied');
+    } catch (err) {
+      if (err?.name === 'AbortError') return; // closed the share sheet
+      setShareNote('Copy this link: ' + productUrl);
+    }
+    setTimeout(() => setShareNote(''), 2500);
   }
 
   return (
@@ -459,7 +554,7 @@ export default function ProductDetail() {
             </div>
           )}
 
-          <div className="detail-actions">
+          <div className="detail-actions" ref={actionsRef}>
             <button className="btn btn-primary" disabled={outOfStock} onClick={handleAdd}>
               {outOfStock ? 'Notify Me' : added ? 'Added ✓' : 'Add to Cart'}
             </button>
@@ -477,6 +572,24 @@ export default function ProductDetail() {
           </div>
           {added && <Link to="/cart" className="view-cart-link">View cart →</Link>}
 
+          <div className="detail-secondary-actions">
+            {whatsappHref && (
+              <a className="ask-whatsapp" href={whatsappHref} target="_blank" rel="noreferrer">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="currentColor" d="M12.04 2a9.9 9.9 0 0 0-8.5 15l-1.4 5 5.2-1.4A9.9 9.9 0 1 0 12.04 2Zm0 18.1a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3.1.8.8-3-.2-.3a8.2 8.2 0 1 1 7 3.9Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.5l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3Z" />
+                </svg>
+                Ask about this saree on WhatsApp
+              </a>
+            )}
+            <button type="button" className="share-btn" onClick={handleShare}>
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 3v12M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Share
+            </button>
+            {shareNote && <span className="share-note" role="status">{shareNote}</span>}
+          </div>
+
           <CancellationPolicyCard />
         </div>
       </div>
@@ -492,6 +605,18 @@ export default function ProductDetail() {
         title={recommended.heading}
         excludeId={product.id}
       />
+
+      {/* Phones: compact add-to-cart bar once the main buttons scroll away */}
+      <div className={`sticky-buy ${showStickyBar && !lightboxOpen ? 'is-visible' : ''}`} aria-hidden={!showStickyBar}>
+        <img src={thumbUrl(mainImage)} alt="" />
+        <div className="sticky-buy-info">
+          <span className="sticky-buy-name">{productLabel}</span>
+          <span className="sticky-buy-price">{formatINR(product.price)}</span>
+        </div>
+        <button className="btn btn-primary" disabled={outOfStock} onClick={handleAdd} tabIndex={showStickyBar ? 0 : -1}>
+          {outOfStock ? 'Sold out' : added ? 'Added ✓' : 'Add to Cart'}
+        </button>
+      </div>
 
       {/* Fullscreen Fabric & Weave Lightbox Modal */}
       {lightboxOpen && (
@@ -786,6 +911,48 @@ export default function ProductDetail() {
           cursor: pointer;
         }
         .detail-actions { display: flex; gap: 12px; }
+        .detail-secondary-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 18px; }
+        .ask-whatsapp {
+          display: inline-flex; align-items: center; gap: 8px;
+          padding: 10px 16px; border-radius: 999px;
+          background: #1f8f4e; color: #fff; font-size: 13px; font-weight: 500;
+          transition: background 0.2s;
+        }
+        .ask-whatsapp:hover { background: #18773f; }
+        .ask-whatsapp svg { width: 18px; height: 18px; flex: none; }
+        .share-btn {
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 10px 14px; border-radius: 999px;
+          border: 1px solid var(--stone-200); background: var(--paper);
+          color: var(--ink-700, var(--ink-600)); font-size: 13px;
+        }
+        .share-btn svg { width: 16px; height: 16px; }
+        .share-note { font-size: 12px; color: var(--ink-400); word-break: break-all; }
+
+        .sticky-buy { display: none; }
+        @media (max-width: 860px) {
+          .sticky-buy {
+            display: flex; align-items: center; gap: 10px;
+            position: fixed; left: 12px; right: 12px;
+            /* sits just above the floating bottom navigation */
+            bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+            z-index: 85;
+            padding: 8px 8px 8px 10px;
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--stone-200); border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(44, 10, 16, 0.18);
+            transform: translateY(calc(100% + 100px)); opacity: 0;
+            transition: transform 0.28s ease, opacity 0.2s ease;
+            pointer-events: none;
+          }
+          .sticky-buy.is-visible { transform: none; opacity: 1; pointer-events: auto; }
+          .sticky-buy img { width: 40px; height: 52px; object-fit: cover; border-radius: 6px; flex: none; }
+          .sticky-buy-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+          .sticky-buy-name { font-size: 12.5px; color: var(--ink-900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .sticky-buy-price { font-size: 13.5px; font-weight: 600; color: var(--maroon-900); }
+          .sticky-buy .btn { padding: 11px 16px; font-size: 13px; white-space: nowrap; margin: 0; }
+        }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .view-cart-link { display: inline-block; margin-top: 14px; font-size: 13px; color: var(--gold-600); border-bottom: 1px solid var(--gold-500); }
 

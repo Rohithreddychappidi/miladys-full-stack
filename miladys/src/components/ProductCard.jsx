@@ -2,7 +2,10 @@ import { Link } from 'react-router-dom';
 import { formatINR } from '../data/store';
 
 export default function ProductCard({ product, hidePrice = false }) {
-  const outOfStock = product.stock === 0;
+  const stock = Number(product.stock);
+  const outOfStock = stock === 0;
+  const lowStock = stock > 0 && stock <= 2;
+  const colors = Array.isArray(product.colors) ? product.colors.filter((c) => c && (c.hex || c.name)) : [];
   const discount = product.mrp > product.price
     ? Math.round(((product.mrp - product.price) / product.mrp) * 100)
     : 0;
@@ -13,9 +16,18 @@ export default function ProductCard({ product, hidePrice = false }) {
         <img src={product.image} alt={product.name} loading="lazy" decoding="async" />
         {outOfStock && <span className="badge badge-out">Out of Stock</span>}
         {!hidePrice && !outOfStock && discount > 0 && <span className="badge badge-sale">{discount}% off</span>}
+        {lowStock && <span className="badge badge-low">Only {stock} left</span>}
       </div>
       <div className="product-info">
         <p className="product-name">{product.name}</p>
+        {colors.length > 1 && (
+          <div className="card-colors" aria-label={`Available in ${colors.length} colours: ${colors.map((c) => c.name).join(', ')}`}>
+            {colors.slice(0, 5).map((c, i) => (
+              <span key={i} className="card-color-dot" style={{ backgroundColor: c.hex || '#48181e' }} title={c.name} />
+            ))}
+            {colors.length > 5 && <span className="card-colors-more">+{colors.length - 5}</span>}
+          </div>
+        )}
         {!hidePrice && (
           <div className="product-price">
             <span className="price">{formatINR(product.price)}</span>
@@ -54,6 +66,10 @@ export default function ProductCard({ product, hidePrice = false }) {
         }
         .badge-sale { background: var(--maroon-900); color: var(--blush-300); }
         .badge-out { background: var(--ink-900); color: #fff; }
+        .badge-low { left: auto; right: 10px; background: rgba(255, 255, 255, 0.92); color: var(--maroon-900); }
+        .card-colors { display: flex; align-items: center; gap: 5px; margin: 0 0 8px; }
+        .card-color-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.15); }
+        .card-colors-more { font-size: 11px; color: var(--ink-400); }
         .product-info { padding: 12px 2px 0; }
         .product-name {
           font-size: 13.5px;

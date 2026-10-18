@@ -18,6 +18,7 @@ export default function LogoIntro() {
   const overlayRef = useRef(null);
   const markRef = useRef(null);
   const [done, setDone] = useState(false);
+  const skipRef = useRef(null);
 
   useLayoutEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -31,7 +32,11 @@ export default function LogoIntro() {
 
     const target = document.getElementById('navBrandLogo');
 
-    if (alreadyPlayed || !target || !markRef.current) {
+    // Only on the home page: someone opening a shared product link should
+    // see the product straight away, not a ~3s splash first.
+    const onHome = window.location.pathname === '/';
+
+    if (alreadyPlayed || !onHome || !target || !markRef.current) {
       setDone(true);
       return undefined;
     }
@@ -56,6 +61,8 @@ export default function LogoIntro() {
     }
 
     function finish() {
+      cancelled = true;
+      window.removeEventListener('keydown', skipRef.current);
       target.style.opacity = '';
       gsap.set(target, { clipPath: 'none' });
       document.body.style.overflow = prevOverflow;
@@ -68,6 +75,15 @@ export default function LogoIntro() {
     }
 
     let tl;
+
+    // Tap / click / any key skips straight to the finished state.
+    skipRef.current = () => {
+      if (cancelled) return;
+      cancelled = true;
+      if (tl) tl.kill();
+      finish();
+    };
+    window.addEventListener('keydown', skipRef.current, { once: true });
 
     // Images must be fully decoded before we measure any rects — otherwise
     // an un-loaded navbar logo reports a zero-size box and the flight
@@ -139,6 +155,7 @@ export default function LogoIntro() {
     return () => {
       cancelled = true;
       if (tl) tl.kill();
+      window.removeEventListener('keydown', skipRef.current);
       document.body.style.overflow = prevOverflow;
     };
   }, []);
@@ -146,14 +163,15 @@ export default function LogoIntro() {
   if (done) return null;
 
   return (
-    <div className="logo-intro" ref={overlayRef} aria-hidden="true">
+    <div className="logo-intro" ref={overlayRef} aria-hidden="true" onPointerDown={() => skipRef.current?.()}>
       <img
         ref={markRef}
         src="/images/monogram.png"
         alt=""
         className="logo-intro-mark"
-        width="512"
-        height="512"
+        width="440"
+        height="440"
+        fetchPriority="high"
       />
 
       <style>{`
