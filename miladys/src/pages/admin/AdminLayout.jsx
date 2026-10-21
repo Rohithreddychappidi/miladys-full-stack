@@ -83,7 +83,11 @@ function AdminLoginGate() {
         .admin-gate { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--stone-100); }
         .admin-gate-card { width: 100%; max-width: 340px; background: var(--paper); border-radius: var(--radius-md); padding: 32px; display: flex; flex-direction: column; gap: 14px; }
         .admin-gate-card h1 { font-size: 20px; margin: 0 0 6px; color: var(--maroon-900); }
-        .admin-gate-card .admin-brand { color: var(--maroon-900); }
+        .admin-gate-card .admin-brand { color: var(--maroon-900); display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-size: 18px; margin-bottom: 6px; }
+        /* The logo's size lives in the signed-in layout's styles too — the
+           login screen needs its own, or the logo shows at full size. */
+        .admin-gate-card .brand-mark { width: 26px; height: 26px; object-fit: contain; flex: 0 0 auto; }
+        .admin-gate-card .cms-tag { font-family: var(--font-body); font-size: 10px; letter-spacing: 0.1em; border: 1px solid var(--maroon-900); color: var(--maroon-900); padding: 2px 6px; border-radius: 4px; }
         .admin-gate-card label { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--ink-600); }
         .admin-gate-card input { padding: 11px 12px; border-radius: var(--radius-sm); border: 1px solid var(--stone-200); font-size: 13.5px; }
         .gate-error { font-size: 12.5px; color: #a13a3a; margin: 0; }

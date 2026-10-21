@@ -607,7 +607,7 @@ export default function AdminProducts() {
             </div>
 
             <label>
-              Price (₹) <span className="required-mark">*</span>
+              <span className="label-text">Price (₹) <span className="required-mark">*</span></span>
               <input type="number" min="0" value={form.price} onChange={(e) => handlePriceChange(e.target.value)} required />
             </label>
 
@@ -615,7 +615,7 @@ export default function AdminProducts() {
               <p className="colour-total">Stock: <strong>{colourTotal}</strong> — the total of the colours below (set each colour&apos;s stock there).</p>
             ) : (
               <label>
-                Stock <span className="required-mark">*</span>
+                <span className="label-text">Stock <span className="required-mark">*</span></span>
                 <input
                   type="number"
                   min="0"
@@ -716,7 +716,7 @@ export default function AdminProducts() {
 
                 <div className="form-row">
                   <label>
-                    Color name <span className="required-mark">*</span>
+                    <span className="label-text">Color name <span className="required-mark">*</span></span>
                     <input
                       type="text"
                       placeholder="e.g. Royal Blue"
@@ -763,7 +763,7 @@ export default function AdminProducts() {
 
                 <div className="form-row">
                   <label>
-                    Stock for this colour <span className="required-mark">*</span>
+                    <span className="label-text">Stock for this colour <span className="required-mark">*</span></span>
                     <input
                       type="number"
                       min="0"
@@ -1131,7 +1131,10 @@ export default function AdminProducts() {
         .name-hint { font-size: 12px; color: #8a5a10; background: #fff8ec; border: 1px solid #f0dcb4; border-radius: var(--radius-sm); padding: 8px 10px; margin: -4px 0 4px; line-height: 1.5; }
         .link-btn { background: none; border: none; padding: 0; color: var(--maroon-900); font-weight: 600; text-decoration: underline; cursor: pointer; font-size: inherit; }
         .colour-total { font-size: 12.5px; color: var(--ink-600); background: var(--stone-100); border-radius: var(--radius-sm); padding: 9px 12px; margin: 0; }
-        .colour-add-btns { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+        /* The product form column is narrow: the colour buttons sit on their own
+           row under the hint, one line each, instead of squeezing beside it. */
+        .colour-add-btns { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start; flex-basis: 100%; }
+        .colour-add-btns .btn { white-space: nowrap; }
         .pick-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: var(--maroon-950); color: var(--ivory); border-radius: var(--radius-md); padding: 9px 14px; margin-bottom: 12px; font-size: 12.5px; position: sticky; top: 0; z-index: 4; }
         .pick-bar .link-btn { color: var(--blush-300); }
         .pick-hint { color: var(--blush-300); font-size: 12px; }
@@ -1144,9 +1147,10 @@ export default function AdminProducts() {
         }
         .section-head-row {
           display: flex;
+          flex-wrap: wrap;
           align-items: flex-start;
           justify-content: space-between;
-          gap: 14px;
+          gap: 10px 14px;
           margin-bottom: 12px;
         }
         .small-btn { padding: 6px 14px !important; font-size: 12px !important; }
@@ -1193,6 +1197,11 @@ export default function AdminProducts() {
           cursor: pointer;
         }
         .color-hex-text { width: 90px !important; }
+        /* The form's general input padding squeezed the swatch to a dash. */
+        .cms-form .color-picker-input { width: 40px; height: 40px; padding: 3px; flex: none; background: var(--paper); }
+        .color-picker-input::-webkit-color-swatch-wrapper { padding: 0; }
+        .color-picker-input::-webkit-color-swatch { border: none; border-radius: 4px; }
+        .color-picker-input::-moz-color-swatch { border: none; border-radius: 4px; }
         .preset-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 8px; }
         .preset-label { font-size: 11px; color: var(--ink-400); }
         .preset-chip {
