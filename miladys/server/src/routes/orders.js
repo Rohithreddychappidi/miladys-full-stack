@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { query, pool } from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { razorpay, razorpayEnabled, verifyPaymentSignature, verifyWebhookSignature } from '../lib/razorpay.js';
-import { confirmPaidOrder } from '../lib/payments.js';
+import { confirmPaidOrder, razorpayPaymentState } from '../lib/payments.js';
 import { sendCancellationEmail, sendShippedEmail, sendDeliveredEmail } from '../lib/email.js';
 import { renderInvoice, renderInvoices } from '../lib/invoice.js';
 import { getStoreInfo } from '../lib/storeInfo.js';
@@ -363,6 +363,42 @@ router.put('/admin/shipping', requireAdmin, async (req, res) => {
     })().catch((err) => console.error('[orders/shipping] email failed', err.message));
   }
   res.json({ ok: true, updated: updated.map((o) => o.id), skipped, emailed: changed.length });
+});
+
+// POST /api/orders/admin/delete — { ids: [..] } permanently deletes
+// EXPIRED orders (never paid). Just before deleting, Razorpay is asked once
+// more: if a payment did arrive, the order is confirmed instead of deleted,
+// and one still being processed is left alone — so a paid order can never
+// be lost this way. Returns { deleted: [ids], kept: [{ id, reason }] }.
+router.post('/admin/delete', requireAdmin, async (req, res) => {
+  const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).map(Number).filter(Number.isInteger);
+  if (!ids.length) return res.status(400).json({ error: 'Select at least one order.' });
+  const { rows } = await query('SELECT id, status, razorpay_order_id FROM orders WHERE id = ANY($1)', [ids]);
+  const deleted = [];
+  const kept = [];
+  for (const id of ids) {
+    const o = rows.find((r) => r.id === id);
+    if (!o) { kept.push({ id, reason: 'not found' }); continue; }
+    if (o.status !== 'expired') { kept.push({ id, reason: 'only expired orders can be deleted' }); continue; }
+    if (o.razorpay_order_id && razorpayEnabled) {
+      try {
+        const pay = await razorpayPaymentState(o.razorpay_order_id);
+        if (pay.state === 'captured') {
+          await confirmPaidOrder({ razorpayOrderId: o.razorpay_order_id, paymentId: pay.paymentId });
+          kept.push({ id, reason: 'a payment had arrived — the order is now confirmed' });
+          continue;
+        }
+        if (pay.state === 'pending') { kept.push({ id, reason: 'a payment is still being processed — try again later' }); continue; }
+      } catch (err) {
+        kept.push({ id, reason: 'could not check with Razorpay — try again later' });
+        continue;
+      }
+    }
+    // Checked inside the DELETE too, in case it changed in the meantime.
+    const { rowCount } = await query("DELETE FROM orders WHERE id = $1 AND status = 'expired'", [id]);
+    if (rowCount) deleted.push(id); else kept.push({ id, reason: 'its status changed' });
+  }
+  res.json({ ok: true, deleted, kept });
 });
 
 // GET /api/orders/admin/invoices?ids=1,2,3 — one PDF with an invoice per

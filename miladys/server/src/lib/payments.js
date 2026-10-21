@@ -92,35 +92,54 @@ export async function confirmPaidOrder({ razorpayOrderId, paymentId, userId = nu
   return { result: 'confirmed', order, items };
 }
 
-// Every 10 minutes: for orders still waiting for payment (placed in the
-// last 3 days, at least 5 minutes ago), ask Razorpay whether a payment
-// went through, and confirm it if so. Orders still unpaid after 24 hours
-// are marked 'expired' (the customer can still use "Complete Order").
-const CHECK_EVERY_MS = 10 * 60 * 1000;
+// Every 5 minutes:
+//  - orders still 'Payment pending' after 20 minutes: ask Razorpay; if paid,
+//    confirm the order, otherwise mark it 'expired';
+//  - recently failed / expired orders (last 24 hours): ask Razorpay again,
+//    so a payment that went through late (slow UPI approval…) still
+//    confirms the order.
+// The customer can still use "Complete Order" on an expired order.
+const CHECK_EVERY_MS = 5 * 60 * 1000;
+export const EXPIRE_AFTER_MINUTES = 20;
+
+// Is there a payment on this Razorpay order? 'captured' (money taken),
+// 'pending' (authorized — still being processed) or null.
+export async function razorpayPaymentState(razorpayOrderId) {
+  const { items: payments = [] } = await razorpay.orders.fetchPayments(razorpayOrderId);
+  const captured = payments.find((p) => p.status === 'captured');
+  if (captured) return { state: 'captured', paymentId: captured.id };
+  if (payments.some((p) => p.status === 'authorized' || p.status === 'created')) return { state: 'pending' };
+  return { state: null };
+}
 
 export async function checkUnpaidOrders() {
-  if (!razorpayEnabled) return { confirmed: 0, expired: 0 };
-  // Recent unpaid orders, plus any older 'created' ones not yet expired
-  // (so nothing is expired without first asking Razorpay about it).
+  // Orders that never reached Razorpay can't be paid — expire them directly.
+  const { rowCount: expiredNoPayment } = await query(
+    `UPDATE orders SET status = 'expired'
+      WHERE status = 'created' AND razorpay_order_id IS NULL AND created_at < now() - make_interval(mins => $1)`,
+    [EXPIRE_AFTER_MINUTES]
+  );
+  if (!razorpayEnabled) return { confirmed: 0, expired: expiredNoPayment };
   const { rows: waiting } = await query(
-    `SELECT id, status, razorpay_order_id, created_at < now() - interval '24 hours' AS overdue FROM orders
-      WHERE razorpay_order_id IS NOT NULL AND created_at < now() - interval '5 minutes'
-        AND (status = 'created' OR (status = 'failed' AND created_at > now() - interval '3 days'))
-      ORDER BY created_at`
+    `SELECT id, status, razorpay_order_id FROM orders
+      WHERE razorpay_order_id IS NOT NULL
+        AND ((status = 'created' AND created_at < now() - make_interval(mins => $1))
+          OR (status IN ('failed', 'expired') AND created_at > now() - interval '24 hours'))
+      ORDER BY created_at`,
+    [EXPIRE_AFTER_MINUTES]
   );
   let confirmed = 0;
-  let expired = 0;
+  let expired = expiredNoPayment;
   for (const o of waiting) {
     try {
-      const { items: payments = [] } = await razorpay.orders.fetchPayments(o.razorpay_order_id);
-      const captured = payments.find((p) => p.status === 'captured');
-      if (captured) {
-        const { result } = await confirmPaidOrder({ razorpayOrderId: o.razorpay_order_id, paymentId: captured.id });
+      const pay = await razorpayPaymentState(o.razorpay_order_id);
+      if (pay.state === 'captured') {
+        const { result } = await confirmPaidOrder({ razorpayOrderId: o.razorpay_order_id, paymentId: pay.paymentId });
         if (result === 'confirmed') {
           confirmed += 1;
           console.log(`[payments] order #MLD${o.id} confirmed from Razorpay (the browser never came back)`);
         }
-      } else if (o.status === 'created' && o.overdue) {
+      } else if (o.status === 'created' && pay.state !== 'pending') {
         const { rowCount } = await query("UPDATE orders SET status = 'expired' WHERE id = $1 AND status = 'created'", [o.id]);
         expired += rowCount;
       }
@@ -135,6 +154,6 @@ export function startPaymentChecks() {
   const run = () => checkUnpaidOrders()
     .then(({ confirmed, expired }) => (confirmed || expired) && console.log(`[payments] check: ${confirmed} confirmed, ${expired} expired`))
     .catch((err) => console.error('[payments] check failed', err.message));
-  setTimeout(run, 30 * 1000);
+  setTimeout(run, 20 * 1000);
   setInterval(run, CHECK_EVERY_MS).unref();
 }

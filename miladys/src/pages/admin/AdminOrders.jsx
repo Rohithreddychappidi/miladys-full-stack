@@ -27,7 +27,8 @@ const TABS = [
   { key: 'attention', label: 'Needs attention', test: (o) => o.status === 'paid_oversold' },
   { key: 'created', label: 'Payment pending', test: (o) => o.status === 'created' },
   { key: 'cancelled', label: 'Cancelled', test: (o) => o.status === 'cancelled' },
-  { key: 'failed', label: 'Failed / expired', test: (o) => o.status === 'failed' || o.status === 'expired' },
+  { key: 'expired', label: 'Expired', test: (o) => o.status === 'expired' },
+  { key: 'failed', label: 'Failed', test: (o) => o.status === 'failed' },
 ];
 
 const DATES = [
@@ -146,6 +147,7 @@ export default function AdminOrders() {
   const visible = filtered.slice(0, limit);
   const selectedOrders = orders.filter((o) => selected.has(o.id));
   const selectedPaid = selectedOrders.filter(isPaid);
+  const selectedExpired = selectedOrders.filter((o) => o.status === 'expired');
   const allVisibleSelected = visible.length > 0 && visible.every((o) => selected.has(o.id));
 
   useEffect(() => { setLimit(PAGE); }, [tab, search, dateRange]);
@@ -213,6 +215,29 @@ export default function AdminOrders() {
     });
   }
 
+  // Permanently delete expired (never paid) orders. The server checks with
+  // Razorpay first and keeps any that turn out to be paid.
+  async function handleDeleteExpired(list) {
+    if (!list.length) return;
+    const n = list.length;
+    if (!window.confirm(`Permanently delete ${n} expired order${n === 1 ? '' : 's'}? These were never paid. This can't be undone.`)) return;
+    setError('');
+    setBusy(true);
+    try {
+      const { deleted, kept } = await api.deleteOrders(list.map((o) => o.id));
+      const { orders: fresh } = await api.getAllOrders();
+      setOrders(fresh);
+      setSelected(new Set());
+      const parts = [`${deleted.length} expired order${deleted.length === 1 ? '' : 's'} deleted`];
+      if (kept.length) parts.push(`${kept.length} kept: ${kept.map((k) => `#MLD${k.id} — ${k.reason}`).join('; ')}`);
+      flash(parts.join(' · '));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleBulkInvoices() {
     setError('');
     setBusy(true);
@@ -272,6 +297,15 @@ export default function AdminOrders() {
       {error && <p className="admin-error" role="alert">{error}</p>}
       {notice && <p className="admin-notice" role="status">{notice}</p>}
 
+      {tab === 'expired' && counts.expired > 0 && (
+        <div className="expired-note">
+          <p>Orders where payment wasn&apos;t completed within 20 minutes. Customers can still complete them from My Orders. Deleting removes them for good (Razorpay is checked first, so a paid order is never deleted).</p>
+          <button type="button" className="btn btn-outline small danger-btn" disabled={busy} onClick={() => handleDeleteExpired(orders.filter((o) => o.status === 'expired'))}>
+            Delete all expired ({counts.expired})
+          </button>
+        </div>
+      )}
+
       {selected.size > 0 && (
         <div className="bulk-bar" role="region" aria-label="Actions for selected orders">
           <span className="bulk-count">{selected.size} selected{selectedPaid.length < selected.size ? ` (${selectedPaid.length} paid)` : ''}</span>
@@ -279,6 +313,11 @@ export default function AdminOrders() {
           <button type="button" className="btn btn-primary small" disabled={busy || !selectedPaid.length} onClick={() => applyShipping(selectedPaid.map((o) => o.id), 'delivered')}>Mark delivered</button>
           <button type="button" className="btn btn-outline small" disabled={busy || !selectedPaid.length} onClick={() => applyShipping(selectedPaid.map((o) => o.id), 'pending')}>Back to &ldquo;To ship&rdquo;</button>
           <button type="button" className="btn btn-outline small" disabled={busy || !selectedPaid.length} onClick={handleBulkInvoices}>Download invoices</button>
+          {selectedExpired.length > 0 && (
+            <button type="button" className="btn btn-outline small danger-btn" disabled={busy} onClick={() => handleDeleteExpired(selectedExpired)}>
+              Delete {selectedExpired.length} expired
+            </button>
+          )}
           <button type="button" className="link-btn" onClick={() => setSelected(new Set())}>Clear</button>
         </div>
       )}
@@ -413,6 +452,9 @@ export default function AdminOrders() {
                     {invoiceId === o.id ? 'Preparing…' : 'Download Invoice'}
                   </button>
                 )}
+                {o.status === 'expired' && (
+                  <button type="button" className="link-btn danger-link" disabled={busy} onClick={() => handleDeleteExpired([o])}>Delete order</button>
+                )}
                 {wa && (
                   <a className="btn btn-outline small wa-btn" href={waHref(wa, waMessage(o))} target="_blank" rel="noreferrer">WhatsApp customer</a>
                 )}
@@ -545,6 +587,10 @@ export default function AdminOrders() {
         .order-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--stone-100); }
         .order-row-actions:empty { display: none; }
         .wa-btn { margin-left: auto; }
+        .danger-btn { color: #a13a3a; border-color: #e5c4c4; background: var(--paper); }
+        .danger-link { color: #a13a3a; }
+        .expired-note { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; background: var(--paper); border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 12px; }
+        .expired-note p { font-size: 12.5px; color: var(--ink-600); margin: 0; flex: 1; min-width: 240px; line-height: 1.5; }
         .show-more { align-self: center; }
         @media (max-width: 860px) { .bulk-bar { top: 64px; } }
         @media (max-width: 760px) {
