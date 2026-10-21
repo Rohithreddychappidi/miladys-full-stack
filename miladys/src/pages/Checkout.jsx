@@ -44,8 +44,6 @@ export default function Checkout() {
   const [selectedId, setSelectedId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyAddress);
-  const [placed, setPlaced] = useState(false);
-  const [orderId, setOrderId] = useState('');
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState('');
   const [couponInput, setCouponInput] = useState('');
@@ -167,9 +165,10 @@ export default function Checkout() {
         handler: async (response) => {
           try {
             await api.verifyOrder(response);
-            setOrderId(`MLD${localOrderId}`);
-            setPlaced(true);
             clearCart();
+            // The detailed confirmation page (its own address, so a refresh
+            // or the back button still shows it).
+            navigate(`/orders/${localOrderId}/confirmed`, { replace: true });
           } catch (err) {
             setError(err.message || 'Payment verification failed. Please contact support.');
           } finally {
@@ -189,21 +188,6 @@ export default function Checkout() {
       setError(err.message);
       setPlacing(false);
     }
-  }
-
-  if (placed) {
-    return (
-      <div className="container checkout-page">
-        <div className="order-confirmed">
-          <h1>Order placed</h1>
-          <p>Your order <strong>{orderId}</strong> has been confirmed and paid. A confirmation email is on its way.</p>
-          <div className="confirm-actions">
-            <Link to="/orders" className="btn btn-primary">View Orders</Link>
-            <Link to="/products" className="btn btn-outline">Continue Shopping</Link>
-          </div>
-        </div>
-      </div>
-    );
   }
 
   if (items.length === 0) {
@@ -455,10 +439,6 @@ export default function Checkout() {
         .payment-note { font-size: 11.5px; color: var(--ink-400); margin-top: 12px; line-height: 1.5; }
         .checkout-error { font-size: 12.5px; color: #a13a3a; margin: 4px 0 0; }
 
-        .order-confirmed { text-align: center; padding: 90px 20px; max-width: 480px; margin: 0 auto; }
-        .order-confirmed h1 { font-size: 30px; margin-bottom: 16px; }
-        .order-confirmed p { font-size: 14.5px; color: var(--ink-600); line-height: 1.7; margin-bottom: 30px; }
-        .confirm-actions { display: flex; gap: 12px; justify-content: center; }
 
         @media (max-width: 900px) {
           .checkout-grid { grid-template-columns: 1fr; }

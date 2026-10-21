@@ -36,6 +36,7 @@ function lazyPage(load) {
 
 const About = lazyPage(() => import('./pages/About'));
 const Orders = lazyPage(() => import('./pages/Orders'));
+const OrderConfirmed = lazyPage(() => import('./pages/OrderConfirmed'));
 const Contact = lazyPage(() => import('./pages/Contact'));
 const Cart = lazyPage(() => import('./pages/Cart'));
 const Checkout = lazyPage(() => import('./pages/Checkout'));
@@ -79,6 +80,7 @@ function PublicSite() {
           <Route path="/products" element={<Products />} />
           <Route path="/products/:id" element={<ProductDetail />} />
           <Route path="/orders" element={<RequireAuth><Orders /></RequireAuth>} />
+          <Route path="/orders/:id/confirmed" element={<RequireAuth><OrderConfirmed /></RequireAuth>} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/cart" element={<Cart />} />
           <Route path="/checkout" element={<RequireAuth><Checkout /></RequireAuth>} />
