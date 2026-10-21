@@ -177,3 +177,4 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
    below the fold instead of appearing mid-screen and jumping down as each
    page's data loads (that jump was the main layout-shift problem). */
 #root > main { min-height: 100vh; }
+.field-note { display: block; font-size: 11px; color: var(--ink-400); margin-top: 4px; font-weight: 400; }

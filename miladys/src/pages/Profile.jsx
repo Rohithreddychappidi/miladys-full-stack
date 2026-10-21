@@ -4,8 +4,10 @@ import RecommendedProducts from '../components/RecommendedProducts';
 import Seo from '../components/Seo';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../data/api';
+import { checkAddress } from '../data/address';
+import AddressFields from '../components/AddressFields';
 
-const emptyAddress = { name: '', mobile: '', line1: '', city: '', state: '', pincode: '' };
+const emptyAddress = { name: '', mobile: '', line1: '', city: '', state: '', pincode: '', country: 'India' };
 const emptyPasswordForm = { currentPassword: '', newPassword: '', confirmPassword: '' };
 
 export default function Profile() {
@@ -32,13 +34,20 @@ export default function Profile() {
     setTimeout(() => setSavedMsg(false), 2500);
   }
 
+  const [addressError, setAddressError] = useState('');
   async function handleAddAddress(e) {
     e.preventDefault();
-    if (!form.line1.trim() || !form.city.trim() || !form.pincode.trim()) return;
-    const { address } = await api.addAddress(form);
-    setAddresses((prev) => [address, ...prev]);
-    setForm(emptyAddress);
-    setShowForm(false);
+    const checked = checkAddress(form);
+    if (checked.error) { setAddressError(checked.error); return; }
+    setAddressError('');
+    try {
+      const { address } = await api.addAddress(checked.address);
+      setAddresses((prev) => [address, ...prev]);
+      setForm(emptyAddress);
+      setShowForm(false);
+    } catch (err) {
+      setAddressError(err.message);
+    }
   }
 
   async function handleDeleteAddress(id) {
@@ -101,7 +110,7 @@ export default function Profile() {
                   type="tel"
                   value={profile.mobile}
                   onChange={(e) => setProfile((p) => ({ ...p, mobile: e.target.value }))}
-                  placeholder="10-digit mobile number"
+                  placeholder="10-digit mobile, or +country code"
                 />
               </label>
               <label>
@@ -169,7 +178,7 @@ export default function Profile() {
               <div className="saved-address" key={a.id}>
                 <div>
                   <strong>{a.name}</strong> · {a.mobile}
-                  <p>{a.line1}, {a.city}, {a.state} — {a.pincode}</p>
+                  <p>{a.line1}, {a.city}{a.state ? `, ${a.state}` : ''}{a.pincode ? ` — ${a.pincode}` : ''}{a.country && a.country !== 'India' ? `, ${a.country}` : ''}</p>
                 </div>
                 <button onClick={() => handleDeleteAddress(a.id)} className="danger">Remove</button>
               </div>
@@ -177,34 +186,8 @@ export default function Profile() {
 
             {showForm && (
               <form className="address-form" onSubmit={handleAddAddress}>
-                <div className="form-row">
-                  <label>
-                    Full name
-                    <input type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
-                  </label>
-                  <label>
-                    Mobile number
-                    <input type="tel" value={form.mobile} onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value }))} required />
-                  </label>
-                </div>
-                <label>
-                  Address
-                  <input type="text" placeholder="House no, street, area" value={form.line1} onChange={(e) => setForm((f) => ({ ...f, line1: e.target.value }))} required />
-                </label>
-                <div className="form-row three">
-                  <label>
-                    City
-                    <input type="text" value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} required />
-                  </label>
-                  <label>
-                    State
-                    <input type="text" value={form.state} onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))} required />
-                  </label>
-                  <label>
-                    Pincode
-                    <input type="text" value={form.pincode} onChange={(e) => setForm((f) => ({ ...f, pincode: e.target.value }))} required />
-                  </label>
-                </div>
+                <AddressFields form={form} setForm={setForm} />
+                {addressError && <p className="address-error" role="alert">{addressError}</p>}
                 <div className="form-actions">
                   <button type="submit" className="btn btn-primary">Save Address</button>
                   <button type="button" className="btn btn-outline" onClick={() => setShowForm(false)}>Cancel</button>
@@ -218,6 +201,7 @@ export default function Profile() {
       <RecommendedProducts />
 
       <style>{`
+        .address-error { font-size: 12.5px; color: #a13a3a; margin: 0; }
         .profile-page { padding: 56px 0 0; }
         .page-head { margin-bottom: 30px; }
         .page-head h1 { font-size: 34px; margin-top: 8px; }

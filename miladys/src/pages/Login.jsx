@@ -84,7 +84,8 @@ export default function Login() {
             {mode === 'signup' && (
               <label>
                 Mobile
-                <input type="tel" value={form.mobile} onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value }))} />
+                <input type="tel" placeholder="e.g. 98765 43210" value={form.mobile} onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value }))} />
+                <span className="field-note">Outside India? Start with + and your country code.</span>
               </label>
             )}
             <label>

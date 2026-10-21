@@ -4,6 +4,7 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { razorpay, razorpayEnabled, verifyPaymentSignature, verifyWebhookSignature } from '../lib/razorpay.js';
 import { confirmPaidOrder, razorpayPaymentState } from '../lib/payments.js';
 import { stockForLine, returnStock } from '../lib/stock.js';
+import { checkAddress } from '../lib/address.js';
 import { sendCancellationEmail, sendShippedEmail, sendDeliveredEmail } from '../lib/email.js';
 import { renderInvoice, renderInvoices } from '../lib/invoice.js';
 import { getStoreInfo } from '../lib/storeInfo.js';
@@ -32,11 +33,13 @@ router.post('/create', requireAuth, async (req, res) => {
   if (!razorpayEnabled) {
     return res.status(503).json({ error: 'Payments are not configured yet. Add RAZORPAY_KEY_ID/SECRET to server/.env.' });
   }
-  const { items, address, couponCode } = req.body || {};
+  const { items, address: rawAddress, couponCode } = req.body || {};
   if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: 'Cart is empty.' });
-  if (!address?.name || !address?.mobile || !address?.line1 || !address?.city || !address?.pincode) {
-    return res.status(400).json({ error: 'A complete shipping address is required.' });
-  }
+  // Saved before these checks existed, an address may be incomplete —
+  // the customer is asked to add it again.
+  const checked = checkAddress(rawAddress);
+  if (checked.error) return res.status(400).json({ error: `${checked.error} Please edit or add the delivery address.` });
+  const address = checked.address;
 
   // Quantities come from the browser: each must be a whole number 1–10.
   // (A negative quantity used to lower the order total — and the payment
@@ -112,9 +115,9 @@ router.post('/create', requireAuth, async (req, res) => {
   try {
     await client.query('BEGIN');
     const orderInsert = await client.query(
-      `INSERT INTO orders (user_id, status, subtotal, shipping_fee, coupon_id, coupon_code, discount, address_name, address_mobile, address_line1, address_city, address_state, address_pincode)
-       VALUES ($1,'created',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-      [req.user.id, subtotal, shippingFee, coupon?.id || null, coupon?.code || null, discount, address.name, address.mobile, address.line1, address.city, address.state || '', address.pincode]
+      `INSERT INTO orders (user_id, status, subtotal, shipping_fee, coupon_id, coupon_code, discount, address_name, address_mobile, address_line1, address_city, address_state, address_pincode, address_country)
+       VALUES ($1,'created',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      [req.user.id, subtotal, shippingFee, coupon?.id || null, coupon?.code || null, discount, address.name, address.mobile, address.line1, address.city, address.state || '', address.pincode, address.country]
     );
     const order = orderInsert.rows[0];
 

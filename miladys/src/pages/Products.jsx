@@ -108,6 +108,18 @@ export default function Products() {
       .finally(() => setLoading(false));
   }
 
+  // ?category= is a category's web address (slug); old links used its id.
+  const activeCat = activeCategory === 'all' ? null : categories.find((c) => c.slug === activeCategory || c.id === activeCategory);
+  const isActive = (c) => activeCat?.id === c.id;
+  // An old-style link (?category=<id>) is switched to the clean address.
+  useEffect(() => {
+    if (activeCat && activeCat.slug && activeCategory !== activeCat.slug) {
+      const next = new URLSearchParams(searchParams);
+      next.set('category', activeCat.slug);
+      setSearchParams(next, { replace: true });
+    }
+  }, [activeCat, activeCategory, searchParams, setSearchParams]);
+
   function setCategory(id) {
     const next = new URLSearchParams(searchParams);
     if (id === 'all') next.delete('category');
@@ -126,10 +138,10 @@ export default function Products() {
     setFiltersOpen(false);
   }
 
-  const activeCategoryName = activeCategory !== 'all'
-    ? categories.find((c) => c.id === activeCategory)?.name
-    : null;
-  const seoTitle = activeCategoryName ? `${activeCategoryName} Sarees` : 'Shop All Sarees';
+  const activeCategoryName = activeCat?.name || null;
+  const seoTitle = activeCategoryName
+    ? (/sarees?$/i.test(activeCategoryName) ? activeCategoryName : `${activeCategoryName} Sarees`)
+    : 'Shop All Sarees';
 
   return (
     <div className="products-page">
@@ -138,7 +150,7 @@ export default function Products() {
         path={activeCategory !== 'all' ? `/products?category=${activeCategory}` : '/products'}
         description={
           activeCategoryName
-            ? `Shop handwoven ${activeCategoryName} sarees at Milady's — sourced directly from India's weaving clusters.`
+            ? `Shop handwoven ${/sarees?$/i.test(activeCategoryName) ? activeCategoryName : `${activeCategoryName} sarees`} at Milady's — sourced directly from India's weaving clusters.`
             : "Browse Milady's full collection of handwoven silk and everyday sarees — Kanjivaram, Banarasi, bridal, organza and more."
         }
       />
@@ -166,7 +178,7 @@ export default function Products() {
               </li>
               {categories.map((c) => (
                 <li key={c.id}>
-                  <button className={activeCategory === c.id ? 'active' : ''} onClick={() => selectCategory(c.id)}>
+                  <button className={isActive(c) ? 'active' : ''} onClick={() => selectCategory(c.slug || c.id)}>
                     {c.name}
                   </button>
                 </li>

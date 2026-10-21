@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../data/api';
 import { STORE_DEFAULTS, loadStoreInfo } from '../../data/storeInfo';
+import { DEFAULT_DESCRIPTION } from '../../components/Seo';
 
 // Admin → Footer & Contact. One place for the store's details; they're used
 // by the footer, the Contact page, the policy pages and the PDF invoice.
-const STORE_FIELDS = ['description', 'phone', 'email', 'address', 'mapsLink', 'hours'];
+const STORE_FIELDS = ['description', 'seoDescription', 'phone', 'email', 'address', 'mapsLink', 'hours'];
 const SOCIAL_FIELDS = ['whatsapp', 'instagram', 'facebook', 'twitter'];
 
 export default function AdminStore() {
@@ -62,6 +63,18 @@ export default function AdminStore() {
           <label>
             Short description (under the logo)
             <textarea rows="2" maxLength={200} value={form.description} onChange={set('description')} />
+          </label>
+        </section>
+
+        <section className="store-card">
+          <h3>Google search</h3>
+          <label>
+            Website description
+            <textarea rows="3" maxLength={300} value={form.seoDescription || ''} onChange={set('seoDescription')} placeholder={DEFAULT_DESCRIPTION} />
+            <span className="hint">
+              The short text Google shows under &ldquo;Milady&apos;s&rdquo; in search results. Mention what you sell and where — about 150 characters works best
+              ({(form.seoDescription || '').length || DEFAULT_DESCRIPTION.length} now). Leave empty to use the text shown in grey.
+            </span>
           </label>
         </section>
 

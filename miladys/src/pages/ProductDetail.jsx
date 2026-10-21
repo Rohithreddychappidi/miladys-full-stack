@@ -137,10 +137,15 @@ export default function ProductDetail() {
 
   // Category names for the breadcrumb (Home > Category > Product).
   const [categoryNames, setCategoryNames] = useState({});
+  const [categorySlugs, setCategorySlugs] = useState({});
   useEffect(() => {
     let active = true;
     api.getCategories()
-      .then(({ categories }) => active && setCategoryNames(Object.fromEntries(categories.map((c) => [c.id, c.name]))))
+      .then(({ categories }) => {
+        if (!active) return;
+        setCategoryNames(Object.fromEntries(categories.map((c) => [c.id, c.name])));
+        setCategorySlugs(Object.fromEntries(categories.map((c) => [c.id, c.slug || c.id])));
+      })
       .catch(() => {});
     return () => { active = false; };
   }, []);
@@ -408,13 +413,14 @@ export default function ProductDetail() {
   const categoryLabel = product.category
     ? categoryNames[product.category] || product.category.replace(/[-_]+/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase())
     : '';
+  const categoryHref = `/products?category=${encodeURIComponent(categorySlugs[product.category] || product.category)}`;
   const breadcrumbs = (extraClass) => (
     <nav className={`detail-breadcrumbs ${extraClass}`} aria-label="Breadcrumb">
       <Link to="/" className="breadcrumb-link">Home</Link>
       {categoryLabel && (
         <>
           <span className="breadcrumb-sep" aria-hidden="true">&gt;</span>
-          <Link to={`/products?category=${encodeURIComponent(product.category)}`} className="breadcrumb-link">{categoryLabel}</Link>
+          <Link to={categoryHref} className="breadcrumb-link">{categoryLabel}</Link>
         </>
       )}
       <span className="breadcrumb-sep" aria-hidden="true">&gt;</span>
@@ -470,7 +476,7 @@ export default function ProductDetail() {
           '@type': 'BreadcrumbList',
           itemListElement: [
             { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE_URL}/` },
-            ...(categoryLabel ? [{ '@type': 'ListItem', position: 2, name: categoryLabel, item: `${SITE_URL}/products?category=${encodeURIComponent(product.category)}` }] : []),
+            ...(categoryLabel ? [{ '@type': 'ListItem', position: 2, name: categoryLabel, item: `${SITE_URL}${categoryHref}` }] : []),
             { '@type': 'ListItem', position: categoryLabel ? 3 : 2, name: product.name, item: `${SITE_URL}/products/${product.id}` },
           ],
         }, {

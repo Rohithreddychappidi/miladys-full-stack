@@ -4,7 +4,7 @@ export default function CategoryStrip({ categories }) {
   return (
     <div className="category-grid">
       {categories.map((c) => (
-        <Link key={c.id} to={`/products?category=${c.id}`} className="category-card">
+        <Link key={c.id} to={`/products?category=${c.slug || c.id}`} className="category-card">
           <div className="category-card-image">
             <img src={c.image} alt="" loading="lazy" decoding="async" />
             <span className="category-card-overlay" />

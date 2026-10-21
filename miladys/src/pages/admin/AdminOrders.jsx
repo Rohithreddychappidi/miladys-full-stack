@@ -51,7 +51,7 @@ function matches(o, q) {
   const qDigits = digitsOf(q);
   if (qDigits.length >= 4 && [o.address_mobile, o.customer_mobile].some((m) => digitsOf(m).includes(qDigits.slice(-10)))) return true;
   const hay = [
-    o.customer_name, o.customer_email, o.address_name, o.address_city, o.address_pincode,
+    o.customer_name, o.customer_email, o.address_name, o.address_city, o.address_pincode, o.address_country,
     o.tracking_number, o.courier, o.coupon_code, o.razorpay_payment_id,
     ...(o.items || []).flatMap((i) => [i.product_name, i.sku]),
   ];
@@ -89,12 +89,12 @@ function csvCell(v) {
 }
 
 function exportCsv(list) {
-  const head = ['Order', 'Date', 'Customer', 'Email', 'Phone', 'Ship to', 'Address', 'City', 'State', 'Pincode', 'Items', 'Subtotal', 'Discount', 'Shipping', 'Total', 'Payment', 'Shipping status', 'Courier', 'Tracking number', 'Tracking link'];
+  const head = ['Order', 'Date', 'Customer', 'Email', 'Phone', 'Ship to', 'Address', 'City', 'State', 'Pincode', 'Country', 'Items', 'Subtotal', 'Discount', 'Shipping', 'Total', 'Payment', 'Shipping status', 'Courier', 'Tracking number', 'Tracking link'];
   const rows = list.map((o) => [
     `MLD${o.id}`,
     new Date(o.created_at).toLocaleString('en-IN'),
     o.customer_name, o.customer_email, o.address_mobile || o.customer_mobile,
-    o.address_name, o.address_line1, o.address_city, o.address_state, o.address_pincode,
+    o.address_name, o.address_line1, o.address_city, o.address_state, o.address_pincode, o.address_country || 'India',
     (o.items || []).map((i) => `${i.sku ? `[${i.sku}] ` : ''}${i.product_name}${i.color ? ` (${i.color})` : ''} x${i.qty}`).join('; '),
     o.subtotal, o.discount || 0, o.shipping_fee || 0, orderTotal(o),
     statusLabels[o.status] || o.status,
@@ -388,6 +388,7 @@ export default function AdminOrders() {
                     {o.address_city ? `, ${o.address_city}` : ''}
                     {o.address_state ? `, ${o.address_state}` : ''}
                     {o.address_pincode ? ` – ${o.address_pincode}` : ''}
+                    {o.address_country && o.address_country !== 'India' && <strong className="abroad"> · {o.address_country}</strong>}
                   </p>
                 </div>
 
@@ -580,6 +581,7 @@ export default function AdminOrders() {
           text-decoration: none;
         }
         .item-link:hover { background: var(--blush-300); color: var(--maroon-900); }
+        .abroad { color: var(--maroon-900); }
         .item-sku { font-style: normal; color: var(--ink-400); font-size: 11px; }
         .item-link img { width: 28px; height: 28px; border-radius: 4px; object-fit: cover; flex: 0 0 auto; }
 

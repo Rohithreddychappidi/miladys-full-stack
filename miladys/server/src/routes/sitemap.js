@@ -31,8 +31,12 @@ function urlEntry(loc, { lastmod, changefreq, priority } = {}) {
 router.get('/sitemap.xml', async (_req, res) => {
   try {
     const [{ rows: products }, { rows: categories }] = await Promise.all([
-      query('SELECT id, created_at FROM products ORDER BY created_at DESC'),
-      query('SELECT id FROM categories ORDER BY sort_order ASC'),
+      // Only what visitors can actually open: hidden products show "not
+      // found", and hidden or empty categories are blank pages.
+      query('SELECT id, created_at FROM products WHERE active = true ORDER BY created_at DESC'),
+      query(`SELECT c.slug, c.id FROM categories c
+              WHERE c.active = true AND EXISTS (SELECT 1 FROM products p WHERE p.category_id = c.id AND p.active = true)
+              ORDER BY c.sort_order ASC`),
     ]);
 
     const staticUrls = [
@@ -40,10 +44,13 @@ router.get('/sitemap.xml', async (_req, res) => {
       urlEntry(`${SITE_URL}/products`, { changefreq: 'daily', priority: '0.9' }),
       urlEntry(`${SITE_URL}/about`, { changefreq: 'monthly', priority: '0.5' }),
       urlEntry(`${SITE_URL}/contact`, { changefreq: 'monthly', priority: '0.4' }),
+      urlEntry(`${SITE_URL}/privacy-policy`, { changefreq: 'yearly', priority: '0.2' }),
+      urlEntry(`${SITE_URL}/terms-and-conditions`, { changefreq: 'yearly', priority: '0.2' }),
+      urlEntry(`${SITE_URL}/return-policy`, { changefreq: 'yearly', priority: '0.3' }),
     ];
 
     const categoryUrls = categories.map((c) =>
-      urlEntry(`${SITE_URL}/products?category=${encodeURIComponent(c.id)}`, {
+      urlEntry(`${SITE_URL}/products?category=${encodeURIComponent(c.slug || c.id)}`, {
         changefreq: 'weekly',
         priority: '0.7',
       })

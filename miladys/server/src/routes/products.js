@@ -20,7 +20,8 @@ function buildFilters({ category, q, exclude, ids }, { includeHidden = false } =
   const where = [];
   const params = [];
   if (!includeHidden) where.push('active = true');
-  if (category) { params.push(category); where.push(`category_id = $${params.length}`); }
+  // ?category= takes a category's web address (slug) or, for old links, its id.
+  if (category) { params.push(category); where.push(`category_id = (SELECT id FROM categories WHERE slug = $${params.length} OR id = $${params.length} ORDER BY (slug = $${params.length}) DESC LIMIT 1)`); }
   if (q && String(q).trim()) { params.push(`%${String(q).trim()}%`); where.push(`(name ILIKE $${params.length} OR sku ILIKE $${params.length})`); }
   if (exclude) { params.push(String(exclude)); where.push(`id <> $${params.length}`); }
   if (ids) {

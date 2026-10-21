@@ -109,7 +109,6 @@ export default function Home() {
     <div className="home">
       <Seo
         path="/"
-        description="Milady's — handwoven silk and everyday sarees sourced directly from India's weaving clusters. Shop Kanjivaram, Banarasi, bridal and organza sarees online."
         jsonLd={{
           '@context': 'https://schema.org',
           '@type': 'Organization',

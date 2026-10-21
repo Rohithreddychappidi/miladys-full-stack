@@ -6,6 +6,7 @@ import { query } from '../db.js';
 import { signToken, requireAuth } from '../middleware/auth.js';
 import { sendLoginEmail, sendPasswordResetEmail } from '../lib/email.js';
 import { limits } from '../middleware/rateLimit.js';
+import { checkAddress, normalizePhone } from '../lib/address.js';
 
 const router = Router();
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').toLowerCase();
@@ -21,6 +22,8 @@ router.post('/signup', ...limits.signup, async (req, res) => {
   if (!name?.trim() || !email?.trim() || !password || password.length < 6) {
     return res.status(400).json({ error: 'Name, email and a password (6+ chars) are required.' });
   }
+  const cleanMobile = mobile ? normalizePhone(mobile) : null;
+  if (mobile && !cleanMobile) return res.status(400).json({ error: 'Please enter a valid 10-digit mobile number, or an international number starting with + and the country code.' });
 
   const normalizedEmail = email.trim().toLowerCase();
   const existing = await query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
@@ -34,7 +37,7 @@ router.post('/signup', ...limits.signup, async (req, res) => {
   const { rows } = await query(
     `INSERT INTO users (name, email, password_hash, mobile, is_admin)
      VALUES ($1,$2,$3,$4,$5) RETURNING id, name, email, mobile, is_admin`,
-    [name.trim(), normalizedEmail, passwordHash, mobile || null, isAdmin]
+    [name.trim(), normalizedEmail, passwordHash, cleanMobile, isAdmin]
   );
 
   const user = rows[0];
@@ -187,9 +190,15 @@ router.get('/me', requireAuth, async (req, res) => {
 
 router.put('/me', requireAuth, async (req, res) => {
   const { name, mobile } = req.body || {};
+  let cleanMobile = null;
+  if (mobile !== undefined && mobile !== null && mobile !== '') {
+    cleanMobile = normalizePhone(mobile);
+    if (!cleanMobile) return res.status(400).json({ error: 'Please enter a valid 10-digit mobile number, or an international number starting with + and the country code.' });
+  }
+  if (name !== undefined && !String(name).trim()) return res.status(400).json({ error: 'Your name can\'t be empty.' });
   const { rows } = await query(
     'UPDATE users SET name = COALESCE($1, name), mobile = COALESCE($2, mobile) WHERE id = $3 RETURNING id, name, email, mobile, is_admin',
-    [name, mobile, req.user.id]
+    [name !== undefined ? String(name).trim() : null, cleanMobile, req.user.id]
   );
   res.json({ user: publicUser(rows[0]) });
 });
@@ -222,14 +231,12 @@ router.get('/addresses', requireAuth, async (req, res) => {
 });
 
 router.post('/addresses', requireAuth, async (req, res) => {
-  const { name, mobile, line1, city, state, pincode } = req.body || {};
-  if (!name || !mobile || !line1 || !city || !pincode) {
-    return res.status(400).json({ error: 'Name, mobile, address, city and pincode are required.' });
-  }
+  const { address: a, error } = checkAddress(req.body || {});
+  if (error) return res.status(400).json({ error });
   const { rows } = await query(
-    `INSERT INTO addresses (user_id, name, mobile, line1, city, state, pincode)
-     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-    [req.user.id, name, mobile, line1, city, state || '', pincode]
+    `INSERT INTO addresses (user_id, name, mobile, line1, city, state, pincode, country)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [req.user.id, a.name, a.mobile, a.line1, a.city, a.state, a.pincode, a.country]
   );
   res.status(201).json({ address: rows[0] });
 });

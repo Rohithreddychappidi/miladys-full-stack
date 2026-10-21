@@ -187,6 +187,9 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_status TEXT NOT NULL DEFAUL
 -- the Delivered email, or automatically 7 days after shipping if the order
 -- was never marked delivered). Set once, so it's never sent twice.
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS review_requested_at TIMESTAMPTZ;
+-- Deliveries abroad: the address's country (India unless chosen otherwise).
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS address_country TEXT NOT NULL DEFAULT 'India';
+ALTER TABLE addresses ADD COLUMN IF NOT EXISTS country TEXT NOT NULL DEFAULT 'India';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS courier TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_number TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_url TEXT;
@@ -247,6 +250,23 @@ UPDATE products p
   FROM todo t, base b
  WHERE p.id = t.id;
 CREATE UNIQUE INDEX IF NOT EXISTS products_sku_unique ON products (upper(sku));
+
+-- Category web addresses: /products?category=<slug>. Made from the name
+-- the first time (e.g. "Kanjeevaram Sarees" → kanjeevaram-sarees) and
+-- editable in Admin → Categories. Links using the old category id keep
+-- working — the shop accepts either.
+ALTER TABLE categories ADD COLUMN IF NOT EXISTS slug TEXT;
+WITH s AS (
+  SELECT id, COALESCE(NULLIF(trim(both '-' FROM lower(regexp_replace(name, '[^a-zA-Z0-9]+', '-', 'g'))), ''), id) AS base
+    FROM categories WHERE slug IS NULL OR slug = ''
+), r AS (
+  SELECT id, base, row_number() OVER (PARTITION BY base ORDER BY id) AS rn FROM s
+)
+UPDATE categories c
+   SET slug = CASE WHEN r.rn = 1 AND NOT EXISTS (SELECT 1 FROM categories x WHERE x.slug = r.base AND x.id <> c.id)
+                   THEN r.base ELSE r.base || '-' || c.id END
+  FROM r WHERE c.id = r.id;
+CREATE UNIQUE INDEX IF NOT EXISTS categories_slug_unique ON categories (slug);
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS sku TEXT;
 UPDATE order_items i SET sku = p.sku FROM products p WHERE i.product_id = p.id AND i.sku IS NULL;
 -- How many units this line actually took out of product stock when the

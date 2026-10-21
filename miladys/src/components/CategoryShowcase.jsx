@@ -210,7 +210,7 @@ export default function CategoryShowcase({ categories, note, heading }) {
               <Link
                 key={`${c.id}-${Math.floor(i / count)}`}
                 ref={(el) => { cardRefs.current[i] = el; }}
-                to={`/products?category=${c.id}`}
+                to={`/products?category=${c.slug || c.id}`}
                 className={`showcase-scroll-card ${i === focusIndex ? 'is-focus' : ''}`}
                 data-dist={dist}
                 style={{ animationDelay: `${Math.min(i % count, 6) * 70}ms` }}
@@ -246,7 +246,7 @@ export default function CategoryShowcase({ categories, note, heading }) {
               return (
                 <Link
                   key={c.id}
-                  to={`/products?category=${c.id}`}
+                  to={`/products?category=${c.slug || c.id}`}
                   className={`showcase-card ${isFocus ? 'is-focus' : ''}`}
                   style={{
                     transform: `translate(-50%, -50%) translate(${tx}px, 0) scale(${scale})`,

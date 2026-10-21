@@ -265,7 +265,7 @@ export default function Orders() {
                   </div>
                   <div className="order-card-foot">
                     <div className="order-address">
-                      Shipping to {o.address_line1}, {o.address_city} — {o.address_pincode}
+                      Shipping to {o.address_line1}, {o.address_city}{o.address_pincode ? ` — ${o.address_pincode}` : ''}{o.address_country && o.address_country !== 'India' ? `, ${o.address_country}` : ''}
                     </div>
                     <div className="order-total">
                       Total <strong>{formatINR(o.subtotal - (o.discount || 0) + (o.shipping_fee || 0))}</strong>

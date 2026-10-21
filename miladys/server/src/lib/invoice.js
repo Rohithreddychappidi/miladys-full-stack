@@ -100,7 +100,8 @@ function drawInvoice(doc, { order, items, customer }, store) {
   doc.font('Regular').fontSize(9.5).fillColor(INK_LIGHT);
   let billY = 186;
   doc.text(order.address_line1 || '', 50, billY, { width: 260 }); billY += 13;
-  const cityLine = [order.address_city, order.address_state, order.address_pincode].filter(Boolean).join(', ');
+  const abroad = order.address_country && order.address_country !== 'India' ? order.address_country : null;
+  const cityLine = [order.address_city, order.address_state, order.address_pincode, abroad].filter(Boolean).join(', ');
   if (cityLine) { doc.text(cityLine, 50, billY, { width: 260 }); billY += 13; }
   if (order.address_mobile) { doc.text(`Mobile: ${order.address_mobile}`, 50, billY, { width: 260 }); billY += 13; }
   if (customer?.email) { doc.text(customer.email, 50, billY, { width: 260 }); billY += 13; }

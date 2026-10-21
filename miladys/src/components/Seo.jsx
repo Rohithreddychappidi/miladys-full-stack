@@ -1,12 +1,13 @@
 import { useEffect } from 'react';
+import { useStoreInfo } from '../data/storeInfo';
 
 const SITE_NAME = "Milady's";
 const SITE_URL = 'https://www.themiladys.com';
 const DEFAULT_IMAGE = `${SITE_URL}/images/model-saree.png`;
 const DEFAULT_DESCRIPTION =
-  "Handwoven silks and everyday weaves, sourced directly from India's weaving clusters. Shop Kanjivaram, Banarasi, bridal and organza sarees at Milady's.";
+  "Handpicked silk, pattu and everyday sarees from Milady's, Kakinada — Dharmavaram, Kanjeevaram, Kalamkari, Jamdani and more, delivered across India.";
 const DEFAULT_KEYWORDS =
-  "Milady's sarees, Milady's Hyderabad, pure silk sarees online India, Kanjivaram silk saree online, Banarasi silk saree online, pattu sarees online, South Indian bridal sarees, wedding sarees online India, organza sarees online, handloom sarees direct from weavers, sarees Hyderabad, sarees Tirupati";
+  "Milady's sarees, Milady's Kakinada, saree shop Kakinada, sarees online India, Dharmavaram pattu sarees, Kanjeevaram sarees online, pattu sarees online, Kalamkari sarees, Jamdani sarees, party wear sarees, bridal sarees, handloom sarees, sarees Andhra Pradesh";
 
 const JSONLD_ID = 'seo-jsonld';
 
@@ -30,7 +31,7 @@ function setMeta(selector, attr, value) {
  */
 export default function Seo({
   title,
-  description = DEFAULT_DESCRIPTION,
+  description: descriptionProp,
   keywords = DEFAULT_KEYWORDS,
   path = '',
   image = DEFAULT_IMAGE,
@@ -38,6 +39,10 @@ export default function Seo({
   jsonLd,
   noindex = false,
 }) {
+  // Pages without their own description use the one set in Admin → Footer
+  // & Contact ("Website description"), or the built-in default.
+  const store = useStoreInfo();
+  const description = descriptionProp || store.seoDescription || DEFAULT_DESCRIPTION;
   const fullTitle = title ? `${title} | ${SITE_NAME}` : `${SITE_NAME} — Premium Sarees`;
   const url = `${SITE_URL}${path}`;
 

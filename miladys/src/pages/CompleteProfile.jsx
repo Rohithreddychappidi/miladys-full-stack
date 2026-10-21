@@ -49,6 +49,7 @@ export default function CompleteProfile() {
                 value={mobile}
                 onChange={(e) => setMobile(e.target.value)}
               />
+              <span className="field-note">Outside India? Start with + and your country code.</span>
             </label>
 
             {error && <p className="auth-error">{error}</p>}

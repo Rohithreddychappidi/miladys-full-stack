@@ -6,10 +6,12 @@ import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { cartKey, useCartAvailability } from '../data/cartAvailability';
 import { api } from '../data/api';
+import { checkAddress } from '../data/address';
+import AddressFields from '../components/AddressFields';
 import { formatINR } from '../data/store';
 import { thumbUrl } from '../utils/images';
 
-const emptyAddress = { name: '', mobile: '', line1: '', city: '', state: '', pincode: '' };
+const emptyAddress = { name: '', mobile: '', line1: '', city: '', state: '', pincode: '', country: 'India' };
 
 // Fallback only, used until the real settings load from the CMS (or if
 // that fetch fails) — the actual charge always comes from the server's
@@ -110,9 +112,11 @@ export default function Checkout() {
 
   async function handleSaveAddress(e) {
     e.preventDefault();
-    if (!form.line1.trim() || !form.city.trim() || !form.pincode.trim()) return;
+    const checked = checkAddress(form);
+    if (checked.error) { setError(checked.error); return; }
+    setError('');
     try {
-      const { address } = await api.addAddress(form);
+      const { address } = await api.addAddress(checked.address);
       setAddresses((prev) => [address, ...prev]);
       setSelectedId(address.id);
       setShowForm(false);
@@ -145,6 +149,7 @@ export default function Checkout() {
           city: address.city,
           state: address.state,
           pincode: address.pincode,
+          country: address.country || 'India',
         },
         couponCode: coupon?.code || undefined,
       };
@@ -233,7 +238,8 @@ export default function Checkout() {
                 />
                 <div>
                   <strong>{a.name}</strong> · {a.mobile}
-                  <p>{a.line1}, {a.city}, {a.state} — {a.pincode}</p>
+                  <p>{a.line1}, {a.city}{a.state ? `, ${a.state}` : ''}{a.pincode ? ` — ${a.pincode}` : ''}{a.country && a.country !== 'India' ? `, ${a.country}` : ''}</p>
+                  {checkAddress(a).error && <p className="address-warn">This address is incomplete ({checkAddress(a).error.replace(/^Please /, '').replace(/\.$/, '')}) — please add it again below.</p>}
                 </div>
               </label>
             ))}
@@ -246,34 +252,7 @@ export default function Checkout() {
 
             {showForm && (
               <form className="address-form" onSubmit={handleSaveAddress}>
-                <div className="form-row">
-                  <label>
-                    Full name
-                    <input type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
-                  </label>
-                  <label>
-                    Mobile number
-                    <input type="tel" value={form.mobile} onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value }))} required />
-                  </label>
-                </div>
-                <label>
-                  Address
-                  <input type="text" placeholder="House no, street, area" value={form.line1} onChange={(e) => setForm((f) => ({ ...f, line1: e.target.value }))} required />
-                </label>
-                <div className="form-row three">
-                  <label>
-                    City
-                    <input type="text" value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} required />
-                  </label>
-                  <label>
-                    State
-                    <input type="text" value={form.state} onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))} required />
-                  </label>
-                  <label>
-                    Pincode
-                    <input type="text" value={form.pincode} onChange={(e) => setForm((f) => ({ ...f, pincode: e.target.value }))} required />
-                  </label>
-                </div>
+                <AddressFields form={form} setForm={setForm} />
                 <div className="form-actions">
                   <button type="submit" className="btn btn-primary">Save Address</button>
                   {addresses.length > 0 && (
@@ -367,6 +346,7 @@ export default function Checkout() {
         .checkout-page { padding: 56px 0 0; }
         .page-head { margin-bottom: 30px; }
         .page-head h1 { font-size: 34px; margin-top: 8px; }
+        .address-warn { font-size: 12px; color: #a13a3a; margin: 4px 0 0; }
         .checkout-grid { display: grid; grid-template-columns: 1fr 340px; gap: 40px; align-items: flex-start; margin-bottom: 60px; }
         .checkout-main h3 { font-size: 16px; margin: 0 0 16px; color: var(--maroon-900); }
         .items-heading { margin-top: 34px; }

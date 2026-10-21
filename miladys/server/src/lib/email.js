@@ -236,7 +236,7 @@ export function sendOrderConfirmationEmail(user, order, items) {
           <p style="margin:0 0 4px;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:${COLORS.ink400};font-weight:600;">Shipping to</p>
           <p style="margin:0;font-size:13px;line-height:1.6;color:${COLORS.ink900};">
             ${escapeHtml(order.address_name || user.name)}<br/>
-            ${escapeHtml(order.address_line1)}, ${escapeHtml(order.address_city)}, ${escapeHtml(order.address_state || '')} &mdash; ${escapeHtml(order.address_pincode)}
+            ${escapeHtml(order.address_line1)}, ${escapeHtml(order.address_city)}, ${escapeHtml(order.address_state || '')} &mdash; ${escapeHtml(order.address_pincode || '')}${order.address_country && order.address_country !== 'India' ? `, ${escapeHtml(order.address_country)}` : ''}
           </p>
         </td>
       </tr>

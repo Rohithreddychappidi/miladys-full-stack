@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../data/api';
 import { compressImageFile } from '../../utils/compressImage';
 
-const emptyForm = { id: null, name: '', tagline: '', image: '' };
+const emptyForm = { id: null, name: '', tagline: '', image: '', slug: '' };
+const slugify = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
 export default function AdminCategories() {
   const [categories, setCategories] = useState([]);
@@ -75,7 +76,7 @@ export default function AdminCategories() {
     setError('');
     try {
       if (editingId) {
-        await api.updateCategory(editingId, { name: form.name, tagline: form.tagline, image: form.image || undefined });
+        await api.updateCategory(editingId, { name: form.name, tagline: form.tagline, image: form.image || undefined, slug: form.slug || slugify(form.name) });
       } else {
         const id = form.name.trim().toLowerCase().replace(/\s+/g, '-');
         if (categories.some((c) => c.id === id)) {
@@ -86,6 +87,7 @@ export default function AdminCategories() {
           id,
           name: form.name,
           tagline: form.tagline,
+          slug: form.slug || undefined,
           sortOrder: categories.length + 1, // new categories go to the end
           image: form.image || 'https://images.unsplash.com/photo-1717585679395-bbe39b5fb6bc?auto=format&fit=crop&w=800&q=80',
         });
@@ -98,7 +100,7 @@ export default function AdminCategories() {
   }
 
   function handleEdit(category) {
-    setForm({ id: category.id, name: category.name, tagline: category.tagline, image: category.image });
+    setForm({ id: category.id, name: category.name, tagline: category.tagline, image: category.image, slug: category.slug || '' });
     setEditingId(category.id);
   }
 
@@ -167,6 +169,17 @@ export default function AdminCategories() {
           </label>
 
           <label>
+            Web address
+            <input
+              type="text"
+              value={form.slug}
+              placeholder={slugify(form.name) || 'e.g. kanjeevaram-sarees'}
+              onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') }))}
+            />
+            <span className="slug-preview">themiladys.com/products?category=<strong>{slugify(form.slug) || slugify(form.name) || '…'}</strong></span>
+          </label>
+
+          <label>
             Photo
             <input type="file" accept="image/*" ref={fileInput} onChange={handleImage} />
           </label>
@@ -215,6 +228,7 @@ export default function AdminCategories() {
               <div className="row-info">
                 <strong>{c.name}</strong>
                 <span>{c.tagline}</span>
+                {c.slug && <span className="row-slug">/{c.slug}</span>}
                 <span className="row-products">{productCounts[c.id] || 0} {productCounts[c.id] === 1 ? 'saree' : 'sarees'}</span>
               </div>
               {c.active === false && <span className="hidden-badge">Hidden</span>}
@@ -260,6 +274,9 @@ export default function AdminCategories() {
           font-family: var(--font-body);
           font-size: 13.5px;
         }
+        .row-info .row-slug { font-size: 11px; color: var(--ink-400); font-family: ui-monospace, Menlo, monospace; }
+        .slug-preview { font-size: 11px; color: var(--ink-400); word-break: break-all; }
+        .slug-preview strong { color: var(--ink-700); font-weight: 600; }
         .preview-thumb { width: 64px; height: 64px; border-radius: 50%; overflow: hidden; }
         .preview-thumb img { width: 100%; height: 100%; object-fit: cover; }
         .form-actions { display: flex; gap: 10px; }
