@@ -231,6 +231,24 @@ CREATE TABLE IF NOT EXISTS order_items (
 );
 
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS color TEXT;
+
+-- Product codes (SKU) — MLDY001, MLDY002, … Products without one get the
+-- next free number, oldest first (so existing products are numbered by
+-- the date they were added). Admins can change a code; codes are unique
+-- ignoring case. Order lines keep the code the saree had when it was sold.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS sku TEXT;
+WITH base AS (
+  SELECT COALESCE(MAX(substring(sku FROM 5)::int), 0) AS m FROM products WHERE sku ~ '^MLDY[0-9]+$'
+), todo AS (
+  SELECT id, row_number() OVER (ORDER BY created_at, id) AS rn FROM products WHERE sku IS NULL OR sku = ''
+)
+UPDATE products p
+   SET sku = 'MLDY' || CASE WHEN b.m + t.rn < 1000 THEN lpad((b.m + t.rn)::text, 3, '0') ELSE (b.m + t.rn)::text END
+  FROM todo t, base b
+ WHERE p.id = t.id;
+CREATE UNIQUE INDEX IF NOT EXISTS products_sku_unique ON products (upper(sku));
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS sku TEXT;
+UPDATE order_items i SET sku = p.sku FROM products p WHERE i.product_id = p.id AND i.sku IS NULL;
 -- How many units this line actually took out of product stock when the
 -- payment was confirmed: normally qty, but fewer (often 0) when the order
 -- was oversold. Cancelling puts back exactly this many. NULL on orders

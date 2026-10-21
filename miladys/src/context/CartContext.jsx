@@ -29,6 +29,7 @@ export function CartProvider({ children }) {
               key: itemKey,
               id: product.id,
               name: product.name,
+              sku: product.sku || null,
               price: product.price,
               image: chosenImage,
               color: chosenColor,

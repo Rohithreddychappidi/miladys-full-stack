@@ -21,6 +21,7 @@ export default function ProductCard({ product, hidePrice = false }) {
       </div>
       <div className="product-info">
         <p className="product-name">{product.name}</p>
+        {product.sku && <p className="product-code-tag">{product.sku}</p>}
         {Number(product.rating_count) > 0 && (
           <div className="card-rating" aria-label={`Rated ${product.rating_avg} out of 5 from ${product.rating_count} reviews`}>
             <RatingStars value={product.rating_avg} size={12} />
@@ -78,6 +79,7 @@ export default function ProductCard({ product, hidePrice = false }) {
         .card-color-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.15); }
         .card-colors-more { font-size: 11px; color: var(--ink-400); }
         .product-info { padding: 12px 2px 0; }
+        .product-code-tag { font-size: 10.5px; color: var(--ink-400); letter-spacing: 0.04em; margin: -3px 0 5px; }
         .card-rating { display: flex; align-items: center; gap: 5px; margin: -2px 0 6px; font-size: 11.5px; color: var(--ink-400); }
         .product-name {
           font-size: 13.5px;

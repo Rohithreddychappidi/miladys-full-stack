@@ -179,7 +179,7 @@ export default function AdminReviews() {
             <input type="checkbox" className="row-check" checked={selected.has(r.id)} onChange={() => toggle(r.id)} aria-label={`Select review of ${r.product_name} by ${r.user_name}`} />
             <div className="review-row-main">
               <div className="review-row-head">
-                <Link to={`/products/${r.product_id}#reviews`} target="_blank" rel="noreferrer" className="review-product">{r.product_name} ↗</Link>
+                <Link to={`/products/${r.product_id}#reviews`} target="_blank" rel="noreferrer" className="review-product">{r.product_name}{r.product_sku ? ` · ${r.product_sku}` : ''} ↗</Link>
                 <span className="stars" aria-label={`${r.rating} out of 5`}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
                 <span className={`review-status s-${r.status}`}>{STATUS_LABEL[r.status] || r.status}</span>
               </div>

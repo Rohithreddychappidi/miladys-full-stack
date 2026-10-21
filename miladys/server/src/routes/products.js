@@ -1,13 +1,15 @@
 import { Router } from 'express';
-import { query } from '../db.js';
+import { query, pool } from '../db.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { ingestFromRequest, thumbPath } from '../lib/images.js';
+import { nextSku, cleanSku, skuTaken } from '../lib/sku.js';
+import { normalizeColors } from '../lib/stock.js';
 
 const router = Router();
 
 // Columns for every list view — never the gallery (`images`), which only
 // the single-product page needs. `colors` is trimmed in mapProductList.
-const LIST_COLUMNS = 'id, name, category_id, price, mrp, stock, description, image, colors, active, created_at';
+const LIST_COLUMNS = 'id, sku, name, category_id, price, mrp, stock, description, image, colors, active, created_at';
 const MAX_LIMIT = 60;
 // Star rating from published reviews, for the product page and cards.
 const RATING_COLUMNS = `(SELECT ROUND(AVG(r.rating)::numeric, 1)::float FROM reviews r WHERE r.product_id = products.id AND r.status = 'published') AS rating_avg,
@@ -19,7 +21,7 @@ function buildFilters({ category, q, exclude, ids }, { includeHidden = false } =
   const params = [];
   if (!includeHidden) where.push('active = true');
   if (category) { params.push(category); where.push(`category_id = $${params.length}`); }
-  if (q && String(q).trim()) { params.push(`%${String(q).trim()}%`); where.push(`name ILIKE $${params.length}`); }
+  if (q && String(q).trim()) { params.push(`%${String(q).trim()}%`); where.push(`(name ILIKE $${params.length} OR sku ILIKE $${params.length})`); }
   if (exclude) { params.push(String(exclude)); where.push(`id <> $${params.length}`); }
   if (ids) {
     params.push(String(ids).split(',').map((s) => s.trim()).filter(Boolean));
@@ -106,6 +108,14 @@ router.post('/', requireAdmin, async (req, res) => {
   const body = await ingestFromRequest(req, req.body || {});
   const { name, category, price, mrp, stock, description, image, images, colors, active, allowDuplicate } = body;
   if (!name?.trim() || !category) return res.status(400).json({ error: 'name and category are required.' });
+  const variants = normalizeColors(colors);
+  if (variants.error) return res.status(400).json({ error: variants.error });
+  const code = cleanSku(body.sku);
+  if (code.error) return res.status(400).json({ error: code.error });
+  if (code.sku) {
+    const taken = await skuTaken(code.sku);
+    if (taken) return res.status(409).json({ error: `The product code ${code.sku} is already used by "${taken.name}".` });
+  }
 
   // Block exact re-uploads (same name, or the very same cover photo) unless
   // the admin explicitly confirms. Near matches are only surfaced via
@@ -122,24 +132,72 @@ router.post('/', requireAdmin, async (req, res) => {
   }
 
   const id = 'p' + Date.now();
+  const sku = code.sku || (await nextSku());
   const { rows } = await query(
-    `INSERT INTO products (id, name, category_id, price, mrp, stock, description, image, images, colors, active)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11) RETURNING *`,
+    `INSERT INTO products (id, sku, name, category_id, price, mrp, stock, description, image, images, colors, active)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12) RETURNING *`,
     [
       id,
+      sku,
       name.trim(),
       category,
       Number(price) || 0,
       Number(mrp) || Number(price) || 0,
-      Number(stock) || 0,
+      // With colours, the saree's stock is the total of its colours.
+      variants.total ?? (Number(stock) || 0),
       description || '',
       image || '',
       JSON.stringify(Array.isArray(images) ? images : []),
-      JSON.stringify(Array.isArray(colors) ? colors : []),
+      JSON.stringify(variants.colors),
       active !== false,
     ]
   );
   res.status(201).json({ product: mapProduct(rows[0]) });
+});
+
+// POST /api/products/admin/combine — turns several products (the same
+// design in different colours) into ONE product with a colour each.
+// Body: { targetId, parts: [{ id, colorName, hex }] } — parts includes the
+// target. Each part becomes a colour carrying its own photos and stock; the
+// target keeps its name, price, code and description, and the others are
+// hidden (not deleted, so past orders and invoices stay intact). Their
+// reviews move to the combined product.
+router.post('/admin/combine', requireAdmin, async (req, res) => {
+  const { targetId, parts } = req.body || {};
+  if (!Array.isArray(parts) || parts.length < 2) return res.status(400).json({ error: 'Choose at least two products to combine.' });
+  const ids = parts.map((x) => String(x.id));
+  if (!ids.includes(String(targetId))) return res.status(400).json({ error: 'Choose which product to keep.' });
+  if (new Set(ids).size !== ids.length) return res.status(400).json({ error: 'A product was chosen twice.' });
+  const { rows } = await query('SELECT * FROM products WHERE id = ANY($1)', [ids]);
+  if (rows.length !== ids.length) return res.status(404).json({ error: 'One of the products no longer exists.' });
+  const already = rows.find((p) => Array.isArray(p.colors) && p.colors.length);
+  if (already) return res.status(400).json({ error: `"${already.name}" already has colours — remove them first, or add the others as colours in its form.` });
+  const variants = normalizeColors(parts.map((part) => {
+    const p = rows.find((r) => r.id === String(part.id));
+    return { name: part.colorName, hex: /^#[0-9a-f]{6}$/i.test(part.hex || '') ? part.hex : '#48181e', image: p.image || '', images: p.images || [], stock: p.stock };
+  }));
+  if (variants.error) return res.status(400).json({ error: variants.error });
+
+  const others = ids.filter((id) => id !== String(targetId));
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: updated } = await client.query(
+      'UPDATE products SET colors = $1::jsonb, stock = $2, active = true WHERE id = $3 RETURNING *',
+      [JSON.stringify(variants.colors), variants.total, String(targetId)]
+    );
+    await client.query('UPDATE products SET active = false WHERE id = ANY($1)', [others]);
+    await client.query('UPDATE reviews SET product_id = $1 WHERE product_id = ANY($2)', [String(targetId), others]);
+    await client.query('UPDATE testimonials SET product_id = $1 WHERE product_id = ANY($2)', [String(targetId), others]);
+    await client.query('COMMIT');
+    res.json({ product: mapProduct(updated[0]), hidden: others });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[products/combine]', err);
+    res.status(500).json({ error: 'Could not combine the products. Nothing was changed.' });
+  } finally {
+    client.release();
+  }
 });
 
 // POST /api/products/:id/duplicate — copies an existing product (details,
@@ -150,9 +208,9 @@ router.post('/:id/duplicate', requireAdmin, async (req, res) => {
   if (!src[0]) return res.status(404).json({ error: 'Product not found.' });
   const p = src[0];
   const { rows } = await query(
-    `INSERT INTO products (id, name, category_id, price, mrp, stock, description, image, images, colors, active)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,false) RETURNING *`,
-    ['p' + Date.now(), `${p.name} (Copy)`, p.category_id, p.price, p.mrp, p.stock, p.description, p.image,
+    `INSERT INTO products (id, sku, name, category_id, price, mrp, stock, description, image, images, colors, active)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,false) RETURNING *`,
+    ['p' + Date.now(), await nextSku(), `${p.name} (Copy)`, p.category_id, p.price, p.mrp, p.stock, p.description, p.image,
       JSON.stringify(p.images || []), JSON.stringify(p.colors || [])]
   );
   res.status(201).json({ product: mapProduct(rows[0]) });
@@ -160,14 +218,31 @@ router.post('/:id/duplicate', requireAdmin, async (req, res) => {
 
 router.put('/:id', requireAdmin, async (req, res) => {
   const body = await ingestFromRequest(req, req.body || {});
-  const { name, category, price, mrp, stock, description, image, images, colors, active } = body;
+  const { name, category, price, mrp, description, image, images, colors, active } = body;
+  let { stock } = body;
+  let cleanColors = null;
+  if (colors !== undefined) {
+    const variants = normalizeColors(colors);
+    if (variants.error) return res.status(400).json({ error: variants.error });
+    cleanColors = JSON.stringify(variants.colors);
+    if (variants.total != null) stock = variants.total; // total of the colours
+  }
+  let sku = null;
+  if (body.sku !== undefined) {
+    const code = cleanSku(body.sku);
+    if (code.error) return res.status(400).json({ error: code.error });
+    if (!code.sku) return res.status(400).json({ error: 'The product code can\'t be empty.' });
+    const taken = await skuTaken(code.sku, req.params.id);
+    if (taken) return res.status(409).json({ error: `The product code ${code.sku} is already used by "${taken.name}".` });
+    sku = code.sku;
+  }
   const { rows } = await query(
     `UPDATE products SET
        name = COALESCE($1,name), category_id = COALESCE($2,category_id),
        price = COALESCE($3,price), mrp = COALESCE($4,mrp), stock = COALESCE($5,stock),
        description = COALESCE($6,description), image = COALESCE($7,image),
        images = COALESCE($8::jsonb, images), colors = COALESCE($9::jsonb, colors),
-       active = COALESCE($10,active)
+       active = COALESCE($10,active), sku = COALESCE($12, sku)
      WHERE id = $11 RETURNING *`,
     [
       name,
@@ -178,9 +253,10 @@ router.put('/:id', requireAdmin, async (req, res) => {
       description,
       image,
       images !== undefined ? JSON.stringify(images) : null,
-      colors !== undefined ? JSON.stringify(colors) : null,
+      cleanColors,
       active,
       req.params.id,
+      sku,
     ]
   );
   if (!rows[0]) return res.status(404).json({ error: 'Product not found.' });

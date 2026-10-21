@@ -3,6 +3,7 @@ import { query, pool } from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { razorpay, razorpayEnabled, verifyPaymentSignature, verifyWebhookSignature } from '../lib/razorpay.js';
 import { confirmPaidOrder, razorpayPaymentState } from '../lib/payments.js';
+import { stockForLine, returnStock } from '../lib/stock.js';
 import { sendCancellationEmail, sendShippedEmail, sendDeliveredEmail } from '../lib/email.js';
 import { renderInvoice, renderInvoices } from '../lib/invoice.js';
 import { getStoreInfo } from '../lib/storeInfo.js';
@@ -49,6 +50,8 @@ router.post('/create', requireAuth, async (req, res) => {
     }
     item.qty = n;
     wanted[item.productId] = (wanted[item.productId] || 0) + n;
+    const lineKey = `${item.productId}__${item.color || ''}`;
+    wanted[lineKey] = (wanted[lineKey] || 0) + n;
   }
 
   const productIds = items.map((i) => i.productId);
@@ -62,6 +65,16 @@ router.post('/create', requireAuth, async (req, res) => {
     if (!p) return res.status(400).json({ error: 'One of the sarees in your bag is no longer available — please remove it from your bag and try again.' });
     // Total across every cart line for this saree (e.g. two colours of it).
     if (p.stock < wanted[productId]) return res.status(400).json({ error: `${p.name} is out of stock.` });
+    // Sarees with colours: the colour must exist and have enough of its own stock.
+    if (Array.isArray(p.colors) && p.colors.length) {
+      if (!color || !p.colors.some((c) => c.name === color)) {
+        return res.status(400).json({ error: `Please choose a colour for ${p.name}.` });
+      }
+      const left = stockForLine(p, color);
+      if (left < wanted[`${productId}__${color}`]) {
+        return res.status(400).json({ error: left > 0 ? `Only ${left} left of ${p.name} in ${color}.` : `${p.name} in ${color} is sold out.` });
+      }
+    }
     subtotal += p.price * qty;
     // The line-item photo is whatever the customer was looking at (e.g. a
     // colour variant), but only if it's genuinely one of this product's own
@@ -107,9 +120,9 @@ router.post('/create', requireAuth, async (req, res) => {
 
     for (const { product, qty, color, image } of lineItems) {
       await client.query(
-        `INSERT INTO order_items (order_id, product_id, product_name, product_image, price, qty, color)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [order.id, product.id, product.name, image || product.image, product.price, qty, color || null]
+        `INSERT INTO order_items (order_id, product_id, product_name, product_image, price, qty, color, sku)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [order.id, product.id, product.name, image || product.image, product.price, qty, color || null, product.sku || null]
       );
     }
 
@@ -253,7 +266,7 @@ router.post('/:id/cancel', requireAuth, async (req, res) => {
     // stock_reserved existed have NULL there and fall back to qty.
     for (const item of items) {
       const back = item.stock_reserved ?? item.qty;
-      if (back > 0) await client.query('UPDATE products SET stock = stock + $1 WHERE id = $2', [back, item.product_id]);
+      await returnStock(client, item.product_id, item.color, back);
     }
     await client.query('COMMIT');
   } catch (err) {

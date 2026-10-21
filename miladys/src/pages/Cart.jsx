@@ -66,6 +66,7 @@ export default function Cart() {
                     <div className="cart-item-info">
                       <Link to={`/products/${item.id}`} className="cart-item-name">{item.name}</Link>
                       {item.color && <span className="cart-item-color">Color: {item.color}</span>}
+                      {(item.sku || info?.sku) && <span className="cart-item-code">Code: {item.sku || info?.sku}</span>}
                       <span className="cart-item-price">{formatINR(item.price)}</span>
                       {state === 'gone' && <span className="cart-problem">No longer available — please remove it</span>}
                       {state === 'soldout' && <span className="cart-problem">Sold out — please remove it</span>}
@@ -135,6 +136,7 @@ export default function Cart() {
         .free-ship-bar { height: 6px; border-radius: 999px; background: var(--stone-200); overflow: hidden; }
         .free-ship-bar span { display: block; height: 100%; background: var(--maroon-800); border-radius: 999px; transition: width 0.3s; }
         .cart-row.has-problem { border-color: #e5c4c4; background: #fdf6f6; }
+        .cart-item-code { display: block; font-size: 11px; color: var(--ink-400); letter-spacing: 0.02em; }
         .cart-problem { display: block; font-size: 12px; color: #a13a3a; margin-top: 4px; font-weight: 500; }
         .fix-qty { background: none; border: none; padding: 0; color: var(--maroon-900); text-decoration: underline; font-size: 12px; cursor: pointer; }
         .qty-control button:disabled { opacity: 0.3; cursor: not-allowed; }

@@ -12,6 +12,10 @@ import { formatINR, getProducts } from '../data/store';
 import { loadProductPool } from '../data/catalog';
 import { thumbUrl } from '../utils/images';
 import { useStoreInfo, waHref } from '../data/storeInfo';
+import { stockFor } from '../data/cartAvailability';
+
+// Start on the first colour that's in stock (the first colour if none are).
+const firstAvailableColour = (p) => p.colors.find((c) => stockFor(p, c.name) > 0) || p.colors[0];
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -75,8 +79,9 @@ export default function ProductDetail() {
         if (!active) return;
         setProduct(p);
         if (Array.isArray(p?.colors) && p.colors.length > 0) {
-          setSelectedColor(p.colors[0]);
-          if (p.colors[0].image) setActiveImage(p.colors[0].image);
+          const start = firstAvailableColour(p);
+          setSelectedColor(start);
+          if (start.image) setActiveImage(start.image);
         }
       })
       .catch(() => {
@@ -85,8 +90,9 @@ export default function ProductDetail() {
         if (found) {
           setProduct(found);
           if (Array.isArray(found?.colors) && found.colors.length > 0) {
-            setSelectedColor(found.colors[0]);
-            if (found.colors[0].image) setActiveImage(found.colors[0].image);
+            const start = firstAvailableColour(found);
+            setSelectedColor(start);
+            if (start.image) setActiveImage(start.image);
           }
         } else {
           setNotFound(true);
@@ -177,9 +183,7 @@ export default function ProductDetail() {
   }
 
   // Stock for selected color variant vs overall product
-  const effectiveStock = selectedColor && Number.isFinite(Number(selectedColor.stock))
-    ? Number(selectedColor.stock)
-    : (product?.stock ?? 0);
+  const effectiveStock = product ? stockFor(product, selectedColor?.name) : 0;
   const outOfStock = effectiveStock === 0;
 
   // Hover magnifier handler
@@ -420,10 +424,12 @@ export default function ProductDetail() {
 
   const productUrl = `${SITE_URL}/products/${product.id}`;
   const productLabel = selectedColor?.name ? `${product.name} (${selectedColor.name})` : product.name;
-  const whatsappHref = waHref(whatsapp, `Hi Milady's, I'd like to know more about ${productLabel} — ${productUrl}`);
+  // WhatsApp messages carry the product code, so the store knows exactly which saree.
+  const enquiryLabel = `${productLabel}${product.sku ? ` [${product.sku}]` : ''}`;
+  const whatsappHref = waHref(whatsapp, `Hi Milady's, I'd like to know more about ${enquiryLabel} — ${productUrl}`);
   // Out of stock: instead of a dead button, ask the store to message back
   // when it's in stock again.
-  const restockHref = waHref(whatsapp, `Hi Milady's, please let me know when ${productLabel} is back in stock — ${productUrl}`);
+  const restockHref = waHref(whatsapp, `Hi Milady's, please let me know when ${enquiryLabel} is back in stock — ${productUrl}`);
 
   // Phone share sheet where available; otherwise copy the link.
   async function handleShare() {
@@ -473,7 +479,7 @@ export default function ProductDetail() {
           name: product.name,
           description: product.description || undefined,
           image: gallery.filter((src) => src?.startsWith('http')),
-          sku: product.id,
+          sku: product.sku || product.id,
           offers: {
             '@type': 'Offer',
             url: `${SITE_URL}/products/${product.id}`,
@@ -567,6 +573,7 @@ export default function ProductDetail() {
             {product.mrp > product.price && <span className="mrp">{formatINR(product.mrp)}</span>}
           </div>
 
+          {product.sku && <p className="product-code">Product code: <span>{product.sku}</span></p>}
           <p className="desc">{product.description}</p>
 
           {/* Color Selection with separate photos per color */}
@@ -579,21 +586,23 @@ export default function ProductDetail() {
               <div className="color-swatches" role="radiogroup" aria-label="Choose saree color">
                 {colors.map((c, idx) => {
                   const isSelected = selectedColor?.name === c.name;
+                  const soldOut = stockFor(product, c.name) <= 0;
                   return (
                     <button
                       key={c.name || idx}
                       type="button"
                       role="radio"
                       aria-checked={isSelected}
-                      className={`color-swatch-btn ${isSelected ? 'active' : ''}`}
+                      aria-label={soldOut ? `${c.name} (sold out)` : c.name}
+                      className={`color-swatch-btn ${isSelected ? 'active' : ''} ${soldOut ? 'sold-out' : ''}`}
                       onClick={() => handleSelectColor(c)}
-                      title={c.name}
+                      title={soldOut ? `${c.name} — sold out` : c.name}
                     >
                       <span
                         className="color-swatch-circle"
                         style={{ backgroundColor: c.hex || '#681822' }}
                       />
-                      <span className="color-swatch-label">{c.name}</span>
+                      <span className="color-swatch-label">{c.name}{soldOut && <span className="swatch-sold"> · Sold out</span>}</span>
                     </button>
                   );
                 })}
@@ -602,7 +611,9 @@ export default function ProductDetail() {
           )}
 
           <p className={`stock ${outOfStock ? 'out' : ''}`}>
-            {outOfStock ? 'Currently out of stock' : `${effectiveStock} in stock`}
+            {outOfStock
+              ? (selectedColor && colors.length > 1 ? `${selectedColor.name} is sold out — other colours are available` : 'Currently out of stock')
+              : `${effectiveStock} in stock`}
           </p>
 
           {!outOfStock && (
@@ -955,6 +966,11 @@ export default function ProductDetail() {
           border-color: var(--maroon-700);
           transform: translateY(-1px);
         }
+        .color-swatch-btn.sold-out .color-swatch-circle { opacity: 0.4; background-image: linear-gradient(to top right, transparent calc(50% - 1px), #fff calc(50% - 1px), #fff calc(50% + 1px), transparent calc(50% + 1px)); }
+        .color-swatch-btn.sold-out .color-swatch-label { color: var(--ink-400); }
+        .swatch-sold { text-decoration: none; display: inline; font-size: 11px; }
+        .product-code { font-size: 12px; color: var(--ink-400); margin: -4px 0 12px; letter-spacing: 0.02em; }
+        .product-code span { font-family: ui-monospace, Menlo, monospace; color: var(--ink-600); }
         .color-swatch-btn.active {
           border-color: var(--maroon-900);
           background: #faf4f3;

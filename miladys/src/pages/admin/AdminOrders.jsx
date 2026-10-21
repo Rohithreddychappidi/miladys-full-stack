@@ -53,7 +53,7 @@ function matches(o, q) {
   const hay = [
     o.customer_name, o.customer_email, o.address_name, o.address_city, o.address_pincode,
     o.tracking_number, o.courier, o.coupon_code, o.razorpay_payment_id,
-    ...(o.items || []).map((i) => i.product_name),
+    ...(o.items || []).flatMap((i) => [i.product_name, i.sku]),
   ];
   return hay.some((v) => String(v || '').toLowerCase().includes(text));
 }
@@ -95,7 +95,7 @@ function exportCsv(list) {
     new Date(o.created_at).toLocaleString('en-IN'),
     o.customer_name, o.customer_email, o.address_mobile || o.customer_mobile,
     o.address_name, o.address_line1, o.address_city, o.address_state, o.address_pincode,
-    (o.items || []).map((i) => `${i.product_name}${i.color ? ` (${i.color})` : ''} x${i.qty}`).join('; '),
+    (o.items || []).map((i) => `${i.sku ? `[${i.sku}] ` : ''}${i.product_name}${i.color ? ` (${i.color})` : ''} x${i.qty}`).join('; '),
     o.subtotal, o.discount || 0, o.shipping_fee || 0, orderTotal(o),
     statusLabels[o.status] || o.status,
     isPaid(o) ? shippingLabels[shipping(o)] : '',
@@ -281,7 +281,7 @@ export default function AdminOrders() {
         <input
           type="search"
           className="order-search"
-          placeholder="Search order no., name, email, phone, saree…"
+          placeholder="Search order no., name, email, phone, saree or code…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           aria-label="Search orders"
@@ -421,7 +421,7 @@ export default function AdminOrders() {
                 {o.items.map((item) => (
                   <Link to={`/products/${item.product_id}`} target="_blank" rel="noopener noreferrer" className="item-link" key={item.id}>
                     {item.product_image && <img src={item.product_image} alt="" />}
-                    <span>{item.product_name}{item.color ? ` (${item.color})` : ''} × {item.qty}</span>
+                    <span>{item.product_name}{item.color ? ` (${item.color})` : ''} × {item.qty}{item.sku && <em className="item-sku"> · {item.sku}</em>}</span>
                   </Link>
                 ))}
               </div>
@@ -580,6 +580,7 @@ export default function AdminOrders() {
           text-decoration: none;
         }
         .item-link:hover { background: var(--blush-300); color: var(--maroon-900); }
+        .item-sku { font-style: normal; color: var(--ink-400); font-size: 11px; }
         .item-link img { width: 28px; height: 28px; border-radius: 4px; object-fit: cover; flex: 0 0 auto; }
 
         .order-row-foot { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: var(--ink-400); align-items: center; }

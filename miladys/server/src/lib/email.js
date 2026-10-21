@@ -194,7 +194,7 @@ export function sendOrderConfirmationEmail(user, order, items) {
     .map(
       (i) => `
       <tr>
-        <td style="padding:10px 0;border-bottom:1px solid ${COLORS.stone200};font-size:13px;color:${COLORS.ink900};">${escapeHtml(i.product_name)}</td>
+        <td style="padding:10px 0;border-bottom:1px solid ${COLORS.stone200};font-size:13px;color:${COLORS.ink900};">${escapeHtml(i.product_name)}${i.color ? ` (${escapeHtml(i.color)})` : ''}${i.sku ? `<br><span style="font-size:11px;color:${COLORS.ink400};">Code: ${escapeHtml(i.sku)}</span>` : ''}</td>
         <td style="padding:10px 0;border-bottom:1px solid ${COLORS.stone200};font-size:13px;color:${COLORS.ink600};text-align:center;">${i.qty}</td>
         <td style="padding:10px 0;border-bottom:1px solid ${COLORS.stone200};font-size:13px;color:${COLORS.maroon900};font-weight:600;text-align:right;">₹${(i.price * i.qty).toLocaleString('en-IN')}</td>
       </tr>`
@@ -308,7 +308,7 @@ function orderTotal(order) {
 
 function itemList(items) {
   return items
-    .map((i) => `<li style="margin:0 0 4px;">${escapeHtml(i.product_name)}${i.color ? ` (${escapeHtml(i.color)})` : ''} × ${i.qty}</li>`)
+    .map((i) => `<li style="margin:0 0 4px;">${escapeHtml(i.product_name)}${i.color ? ` (${escapeHtml(i.color)})` : ''} × ${i.qty}${i.sku ? ` <span style="color:${COLORS.ink400};font-size:11px;">· ${escapeHtml(i.sku)}</span>` : ''}</li>`)
     .join('');
 }
 

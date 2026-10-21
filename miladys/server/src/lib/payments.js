@@ -1,6 +1,7 @@
 import { query, pool } from '../db.js';
 import { razorpay, razorpayEnabled } from './razorpay.js';
 import { sendOrderConfirmationEmail } from './email.js';
+import { takeStock } from './stock.js';
 
 // Confirms an order once Razorpay says it's paid. Three things can call it:
 //   - /api/orders/verify — the customer's browser, right after paying;
@@ -51,19 +52,9 @@ export async function confirmPaidOrder({ razorpayOrderId, paymentId, userId = nu
   try {
     await client.query('BEGIN');
     for (const item of items) {
-      const { rows: updated } = await client.query(
-        'UPDATE products SET stock = stock - $1 WHERE id = $2 AND stock >= $1 RETURNING id',
-        [item.qty, item.product_id]
-      );
-      let reserved = item.qty;
-      if (!updated.length) {
-        oversold = true;
-        // Only whatever was left (often 0) actually comes out of stock —
-        // recorded so a later cancellation puts back exactly that.
-        const { rows: prev } = await client.query('SELECT stock FROM products WHERE id = $1 FOR UPDATE', [item.product_id]);
-        reserved = Math.max(0, Math.min(item.qty, prev[0]?.stock ?? 0));
-        await client.query('UPDATE products SET stock = 0 WHERE id = $1', [item.product_id]);
-      }
+      // From the colour's own stock when the saree has colours.
+      const reserved = await takeStock(client, item.product_id, item.color, item.qty);
+      if (reserved < item.qty) oversold = true;
       await client.query('UPDATE order_items SET stock_reserved = $1 WHERE id = $2', [reserved, item.id]);
     }
     // Redeem the coupon now — not at "apply" time — so an abandoned

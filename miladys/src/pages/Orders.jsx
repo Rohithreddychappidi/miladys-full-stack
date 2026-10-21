@@ -255,7 +255,7 @@ export default function Orders() {
                         {item.product_image && <img src={item.product_image} alt={item.product_name} />}
                         <div>
                           <p>{item.product_name}</p>
-                          <span>{item.color ? `Color: ${item.color} · ` : ''}Qty {item.qty} · {formatINR(item.price)}</span>
+                          <span>{item.color ? `Color: ${item.color} · ` : ''}Qty {item.qty} · {formatINR(item.price)}{item.sku ? ` · ${item.sku}` : ''}</span>
                         </div>
                         {isPaid(o) && ship === 'delivered' && item.product_id && (
                           <Link to={`/products/${item.product_id}?review=1#reviews`} className="review-link">★ Write a review</Link>

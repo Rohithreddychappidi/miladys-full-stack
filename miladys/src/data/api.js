@@ -130,6 +130,7 @@ export const api = {
   getSimilarProducts: ({ name, image, excludeId }) =>
     request(`/api/products/admin/similar${productQuery({ name, image: uploadPath(image), excludeId })}`),
   duplicateProduct: (id) => request(`/api/products/${id}/duplicate`, { method: 'POST' }),
+  combineProducts: (payload) => request('/api/products/admin/combine', { method: 'POST', body: payload }),
   createProduct: (payload) => request('/api/products', { method: 'POST', body: payload }),
   updateProduct: (id, payload) => request(`/api/products/${id}`, { method: 'PUT', body: payload }),
   deleteProduct: (id) => request(`/api/products/${id}`, { method: 'DELETE' }),

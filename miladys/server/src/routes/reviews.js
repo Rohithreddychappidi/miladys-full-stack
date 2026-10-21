@@ -88,7 +88,7 @@ router.post('/products/:productId/reviews', requireAuth, async (req, res) => {
 // Admin moderation
 router.get('/admin/reviews', requireAdmin, async (_req, res) => {
   const { rows } = await query(
-    `SELECT r.*, u.name AS user_name, u.email AS user_email, p.name AS product_name, ${VERIFIED_SQL}
+    `SELECT r.*, u.name AS user_name, u.email AS user_email, p.name AS product_name, p.sku AS product_sku, ${VERIFIED_SQL}
      FROM reviews r
      JOIN users u ON u.id = r.user_id
      JOIN products p ON p.id = r.product_id

@@ -3,8 +3,11 @@ import { api } from '../../data/api';
 import { formatINR } from '../../data/store';
 import { compressImageFile } from '../../utils/compressImage';
 import { thumbUrl } from '../../utils/images';
+import { hexForColour, sameNameKey, suggestDistinctName } from '../../data/sareeColors';
+import SameNameFixer from './SameNameFixer';
+import CombineColours from './CombineColours';
 
-const emptyForm = { name: '', category: '', price: '', mrp: '', discountPercent: '', stock: '', description: '', image: '', images: [], colors: [], active: true };
+const emptyForm = { sku: '', name: '', category: '', price: '', mrp: '', discountPercent: '', stock: '', description: '', image: '', images: [], colors: [], active: true };
 
 const SAREE_COLOR_PRESETS = [
   { name: 'Maroon', hex: '#48181e' },
@@ -86,6 +89,11 @@ export default function AdminProducts() {
   const [listCategory, setListCategory] = useState('');
   // ?stock=out / low lets the dashboard link straight to a filtered list.
   const [listStock, setListStock] = useState(() => new URLSearchParams(window.location.search).get('stock') || '');
+  // Ticked products in the list, for "Combine as colours".
+  const [picked, setPicked] = useState(() => new Set());
+  const [combining, setCombining] = useState(false);
+  const [notice, setNotice] = useState('');
+  const colourPhotosInput = useRef(null);
 
   useEffect(() => {
     refresh();
@@ -149,6 +157,24 @@ export default function AdminProducts() {
         { name: '', hex: '#48181e', image: '', images: [], stock: '' },
       ],
     }));
+  }
+
+  // Pick several photos at once → one colour per photo (cover = that
+  // photo, 1 in stock); then just type each colour's name.
+  async function handleColoursFromPhotos(e) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+    setGalleryBusy(true);
+    try {
+      const urls = await Promise.all(files.map((f) => uploadPhoto(f)));
+      setForm((f) => ({
+        ...f,
+        colors: [...(f.colors || []), ...urls.map((url) => ({ name: '', hex: '#48181e', image: url, images: [], stock: 1 }))],
+      }));
+    } finally {
+      setGalleryBusy(false);
+    }
   }
 
   function updateColorVariant(idx, patch) {
@@ -275,19 +301,26 @@ export default function AdminProducts() {
     if (!form.name.trim() || !form.category) return;
     if (uploading > 0) return;
     setError('');
+    const colours = form.colors || [];
+    const unnamed = colours.findIndex((c) => !String(c.name || '').trim());
+    if (unnamed >= 0) { setError(`Colour #${unnamed + 1} needs a name.`); return; }
+    const noStock = colours.find((c) => c.stock === '' || c.stock == null || !Number.isFinite(Number(c.stock)));
+    if (noStock) { setError(`Enter the stock for ${noStock.name} (0 if it's sold out).`); return; }
 
     const payload = {
       name: form.name,
       category: form.category,
       price: Number(form.price) || 0,
       mrp: Number(form.mrp) || Number(form.price) || 0,
-      stock: Number(form.stock) || 0,
+      stock: colours.length ? colourTotal : Number(form.stock) || 0,
       description: form.description,
       image: form.image || 'https://images.unsplash.com/photo-1717585679395-bbe39b5fb6bc?auto=format&fit=crop&w=800&q=80',
       images: form.images || [],
       colors: form.colors || [],
       active: form.active !== false,
     };
+    // Product code: always sent when editing; when adding, blank = next code.
+    if (editingId || form.sku.trim()) payload.sku = form.sku.trim();
     // Gallery/colours never loaded for this edit — don't overwrite them.
     if (editingId && !galleryLoaded) {
       delete payload.images;
@@ -308,6 +341,8 @@ export default function AdminProducts() {
           await api.createProduct({ ...payload, allowDuplicate: true });
         }
       }
+      setNotice(editingId ? 'Saved ✓' : 'Product added ✓');
+      setTimeout(() => setNotice(''), 3000);
       resetForm();
       refresh();
     } catch (err) {
@@ -342,6 +377,7 @@ export default function AdminProducts() {
   async function handleEdit(product) {
     pricingEditRef.current = null;
     setForm({
+      sku: product.sku || '',
       name: product.name,
       category: product.category,
       price: product.price,
@@ -421,7 +457,23 @@ export default function AdminProducts() {
     return categories.find((c) => c.id === id)?.name || id;
   }
 
-  const stockNum = form.stock === '' ? null : Number(form.stock) || 0;
+  const colourTotal = (form.colors || []).reduce((sum, c) => sum + (Number(c.stock) || 0), 0);
+  const hasColours = (form.colors || []).length > 0;
+  const stockNum = hasColours ? colourTotal : form.stock === '' ? null : Number(form.stock) || 0;
+  // Next automatic code, shown as a hint when adding a product.
+  const nextCode = (() => {
+    const max = products.reduce((m, p) => { const n = /^MLDY(\d+)$/.exec(p.sku || ''); return n ? Math.max(m, Number(n[1])) : m; }, 0) + 1;
+    return `MLDY${max < 1000 ? String(max).padStart(3, '0') : max}`;
+  })();
+  // Other sarees with the same name, and a distinct name to suggest.
+  const sameNamed = form.name.trim().length > 2
+    ? products.filter((p) => p.id !== editingId && sameNameKey(p.name) === sameNameKey(form.name))
+    : [];
+  const nameSuggestion = sameNamed.length ? suggestDistinctName(form.name, form.description) : null;
+  const pickedProducts = products.filter((p) => picked.has(p.id));
+  function togglePick(id) {
+    setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  }
   const listQueryLower = listQuery.trim().toLowerCase();
   const stockMatches = (p) => {
     if (listStock === 'out') return p.stock === 0;
@@ -434,7 +486,7 @@ export default function AdminProducts() {
   const listedProducts = products.filter((p) =>
     (!listCategory || p.category === listCategory) &&
     stockMatches(p) &&
-    (!listQueryLower || p.name.toLowerCase().includes(listQueryLower) || p.id.toLowerCase().includes(listQueryLower)));
+    (!listQueryLower || p.name.toLowerCase().includes(listQueryLower) || String(p.sku || '').toLowerCase().includes(listQueryLower) || p.id.toLowerCase().includes(listQueryLower)));
 
   return (
     <div>
@@ -443,7 +495,8 @@ export default function AdminProducts() {
         <p>Add sarees to a category, set price, MRP and stock. Set stock to 0 to intentionally mark a product out of stock.</p>
       </div>
 
-      {error && <p className="admin-error">{error}</p>}
+      {error && <p className="admin-error" role="alert">{error}</p>}
+      {notice && <p className="admin-notice" role="status">{notice}</p>}
 
       <div className="cms-layout">
         <form className="cms-form" onSubmit={handleSubmit}>
@@ -460,6 +513,27 @@ export default function AdminProducts() {
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 required
               />
+            </label>
+            {sameNamed.length > 0 && (
+              <p className="name-hint">
+                {sameNamed.length} other saree{sameNamed.length === 1 ? ' is' : 's are'} called &ldquo;{sameNamed[0].name}&rdquo; — customers can&apos;t tell them apart.{' '}
+                {nameSuggestion
+                  ? <>Try <button type="button" className="link-btn" onClick={() => setForm((f) => ({ ...f, name: nameSuggestion }))}>{nameSuggestion}</button></>
+                  : 'Add the colour or design to the name, e.g. "– Rani Pink".'}
+              </p>
+            )}
+
+            <label>
+              Product code
+              <input
+                type="text"
+                value={form.sku}
+                placeholder={editingId ? '' : `Automatic: ${nextCode}`}
+                onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value.toUpperCase() }))}
+                maxLength={24}
+                required={Boolean(editingId)}
+              />
+              <span className="field-hint">{editingId ? 'Shown on the product page, orders and invoices. Must be unique.' : 'Leave blank to use the next code automatically.'}</span>
             </label>
 
             {similar.length > 0 && (
@@ -537,17 +611,21 @@ export default function AdminProducts() {
               <input type="number" min="0" value={form.price} onChange={(e) => handlePriceChange(e.target.value)} required />
             </label>
 
-            <label>
-              Stock <span className="required-mark">*</span>
-              <input
-                type="number"
-                min="0"
-                value={form.stock}
-                placeholder="e.g. 25"
-                onChange={(e) => setForm((f) => ({ ...f, stock: e.target.value }))}
-                required
-              />
-            </label>
+            {hasColours ? (
+              <p className="colour-total">Stock: <strong>{colourTotal}</strong> — the total of the colours below (set each colour&apos;s stock there).</p>
+            ) : (
+              <label>
+                Stock <span className="required-mark">*</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={form.stock}
+                  placeholder="e.g. 25"
+                  onChange={(e) => setForm((f) => ({ ...f, stock: e.target.value }))}
+                  required
+                />
+              </label>
+            )}
             {stockNum === 0 && (
               <p className="stock-warning">
                 Stock is set to 0 — this product will show as <strong>Out of Stock</strong> on the site the moment you save it. Enter the actual quantity available if that's not intended.
@@ -604,12 +682,18 @@ export default function AdminProducts() {
               <div>
                 <p className="section-label">Color Variants &amp; Separate Photos</p>
                 <p className="field-hint">
-                  If this saree design comes in multiple colors, add each color here with its own photo set.
+                  Only if this <strong>same design</strong> comes in several colours. Each colour has its own photos and stock. One-of-a-kind sarees don&apos;t need this.
                 </p>
               </div>
-              <button type="button" className="btn btn-outline small-btn" onClick={addColorVariant}>
-                + Add Color
-              </button>
+              <div className="colour-add-btns">
+                <button type="button" className="btn btn-outline small-btn" disabled={galleryBusy} onClick={() => colourPhotosInput.current?.click()} title="Pick one photo per colour">
+                  + Colours from photos
+                </button>
+                <button type="button" className="btn btn-outline small-btn" onClick={addColorVariant}>
+                  + Add Color
+                </button>
+                <input ref={colourPhotosInput} type="file" accept="image/*" multiple hidden onChange={handleColoursFromPhotos} />
+              </div>
             </div>
 
             {(!form.colors || form.colors.length === 0) && (
@@ -637,7 +721,7 @@ export default function AdminProducts() {
                       type="text"
                       placeholder="e.g. Royal Blue"
                       value={c.name}
-                      onChange={(e) => updateColorVariant(idx, { name: e.target.value })}
+                      onChange={(e) => updateColorVariant(idx, { name: e.target.value, ...(hexForColour(e.target.value) && { hex: hexForColour(e.target.value) }) })}
                       required
                     />
                   </label>
@@ -679,13 +763,14 @@ export default function AdminProducts() {
 
                 <div className="form-row">
                   <label>
-                    Variant stock (optional override)
+                    Stock for this colour <span className="required-mark">*</span>
                     <input
                       type="number"
                       min="0"
-                      placeholder="Same as base stock if blank"
+                      placeholder="e.g. 1"
                       value={c.stock ?? ''}
                       onChange={(e) => updateColorVariant(idx, { stock: e.target.value })}
+                      required
                     />
                   </label>
                 </div>
@@ -763,7 +848,7 @@ export default function AdminProducts() {
           <div className="list-filters">
             <input
               type="search"
-              placeholder="Search products by name…"
+              placeholder="Search by name or code…"
               value={listQuery}
               onChange={(e) => setListQuery(e.target.value)}
               aria-label="Search products"
@@ -783,16 +868,41 @@ export default function AdminProducts() {
             </select>
             <span className="list-count">{listedProducts.length} of {products.length}</span>
           </div>
+          <SameNameFixer products={products} onRenamed={refresh} />
+          {combining && pickedProducts.length >= 2 ? (
+            <CombineColours
+              products={pickedProducts}
+              onCancel={() => setCombining(false)}
+              onDone={(target) => {
+                setCombining(false);
+                setPicked(new Set());
+                setNotice(`Combined into "${target.name}" — open it to check the colours.`);
+                setTimeout(() => setNotice(''), 5000);
+                refresh();
+              }}
+            />
+          ) : picked.size > 0 && (
+            <div className="pick-bar">
+              <span>{picked.size} selected</span>
+              <button type="button" className="btn btn-primary small-btn" disabled={picked.size < 2} onClick={() => setCombining(true)} title="Same design in different colours → one saree with colours">
+                Combine as colours
+              </button>
+              <button type="button" className="link-btn" onClick={() => setPicked(new Set())}>Clear</button>
+              {picked.size < 2 && <span className="pick-hint">Tick at least two.</span>}
+            </div>
+          )}
           {products.length === 0 && <p className="empty">No products yet.</p>}
           {products.length > 0 && listedProducts.length === 0 && <p className="empty">No products match this search.</p>}
           {listedProducts.map((p) => {
             const hasDiscount = p.mrp > p.price;
             const discountPct = hasDiscount ? Math.round(((p.mrp - p.price) / p.mrp) * 100) : 0;
             return (
-              <div className={`cms-row ${p.active === false ? 'is-hidden' : ''}`} key={p.id}>
+              <div className={`cms-row ${p.active === false ? 'is-hidden' : ''}${picked.has(p.id) ? ' is-picked' : ''}`} key={p.id}>
+                <input type="checkbox" className="row-pick" checked={picked.has(p.id)} onChange={() => togglePick(p.id)} aria-label={`Select ${p.name}`} title="Select (to combine as colours)" />
                 <img src={p.thumb || thumbUrl(p.image)} alt="" className="row-thumb-sq" loading="lazy" />
                 <div className="row-info">
                   <strong>{p.name}</strong>
+                  {p.sku && <span className="row-sku">{p.sku}</span>}
                   <span className="row-category">{categoryName(p.category)}</span>
                   <span className="row-price-line">
                     <span className="row-price">{formatINR(p.price)}</span>
@@ -1018,6 +1128,18 @@ export default function AdminProducts() {
           max-width: 130px;
         }
         .empty { color: var(--ink-400); font-size: 13.5px; }
+        .admin-notice { font-size: 12.5px; color: #1e7039; background: #e8f2e6; padding: 9px 12px; border-radius: var(--radius-sm); margin-bottom: 14px; }
+        .name-hint { font-size: 12px; color: #8a5a10; background: #fff8ec; border: 1px solid #f0dcb4; border-radius: var(--radius-sm); padding: 8px 10px; margin: -4px 0 4px; line-height: 1.5; }
+        .link-btn { background: none; border: none; padding: 0; color: var(--maroon-900); font-weight: 600; text-decoration: underline; cursor: pointer; font-size: inherit; }
+        .colour-total { font-size: 12.5px; color: var(--ink-600); background: var(--stone-100); border-radius: var(--radius-sm); padding: 9px 12px; margin: 0; }
+        .colour-add-btns { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+        .pick-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: var(--maroon-950); color: var(--ivory); border-radius: var(--radius-md); padding: 9px 14px; margin-bottom: 12px; font-size: 12.5px; position: sticky; top: 0; z-index: 4; }
+        .pick-bar .link-btn { color: var(--blush-300); }
+        .pick-hint { color: var(--blush-300); font-size: 12px; }
+        .row-pick { width: 16px; height: 16px; flex: none; cursor: pointer; }
+        .cms-row.is-picked { outline: 1px solid var(--maroon-800); }
+        .row-sku { font-size: 10.5px; font-family: ui-monospace, Menlo, monospace; color: var(--ink-500); letter-spacing: 0.02em; }
+        @media (max-width: 860px) { .pick-bar { top: 64px; } }
         @media (max-width: 980px) {
           .cms-layout { grid-template-columns: 1fr; }
         }

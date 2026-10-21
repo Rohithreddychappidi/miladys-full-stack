@@ -38,7 +38,7 @@ export function useCartAvailability(items) {
           if (!p) info = { state: 'gone', left: 0 };
           else {
             const left = stockFor(p, item.color);
-            info = { state: left <= 0 ? 'soldout' : left < item.qty ? 'short' : 'ok', left, price: Number(p.price) };
+            info = { state: left <= 0 ? 'soldout' : left < item.qty ? 'short' : 'ok', left, price: Number(p.price), sku: p.sku };
           }
           if (info.state !== 'ok') blocking = true;
           byKey[cartKey(item)] = info;

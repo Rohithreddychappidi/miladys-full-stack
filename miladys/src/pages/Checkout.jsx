@@ -293,7 +293,7 @@ export default function Checkout() {
                     <div>
                       <p>{item.name}</p>
                       {item.color && <span className="checkout-item-color">Color: {item.color}</span>}
-                      <span>Qty {item.qty}</span>
+                      <span>Qty {item.qty}{(item.sku || availability.byKey[itemKey]?.sku) ? ` · ${item.sku || availability.byKey[itemKey]?.sku}` : ''}</span>
                     </div>
                     <span className="item-total">{formatINR(item.price * item.qty)}</span>
                   </div>

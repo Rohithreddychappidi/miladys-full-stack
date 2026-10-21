@@ -125,10 +125,15 @@ function drawInvoice(doc, { order, items, customer }, store) {
   items.forEach((item, i) => {
     const displayName = item.color ? `${item.product_name} (${item.color})` : item.product_name;
     // Long saree names wrap — the row grows to fit them.
-    const rowHeight = Math.max(24, doc.heightOfString(displayName, { width: 275 }) + 14);
+    const nameHeight = doc.heightOfString(displayName, { width: 275 });
+    const rowHeight = Math.max(24, nameHeight + 14 + (item.sku ? 11 : 0));
     if (rowY + rowHeight > 740) { doc.addPage(); rowY = 60; }
     if (i % 2 === 1) doc.rect(50, rowY, 495, rowHeight).fill('#FAF6F1');
     doc.fillColor(INK).text(displayName, col.item + 8, rowY + 7, { width: 275 });
+    if (item.sku) {
+      doc.fillColor(INK_LIGHT).fontSize(7.5).text(`Code: ${item.sku}`, col.item + 8, rowY + 8 + nameHeight, { width: 275 });
+      doc.fontSize(9.5).fillColor(INK);
+    }
     doc.text(String(item.qty), col.qty, rowY + 7, { width: 40, align: 'right' });
     doc.text(formatINR(item.price), col.price, rowY + 7, { width: 60, align: 'right' });
     doc.text(formatINR(item.price * item.qty), col.total, rowY + 7, { width: 65, align: 'right' });
