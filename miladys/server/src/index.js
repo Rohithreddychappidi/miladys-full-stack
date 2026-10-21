@@ -6,6 +6,7 @@ import express from 'express';
 import cors from 'cors';
 import compression from 'compression';
 import { ensureSchema } from './db.js';
+import { startReviewReminders } from './lib/reviewReminders.js';
 import { attachUser } from './middleware/auth.js';
 import { absoluteUploadUrls, IMG_DIR } from './lib/images.js';
 
@@ -96,6 +97,9 @@ app.use('/api/cancellation-policy', cancellationPolicyRoutes);
 app.use((err, _req, res, _next) => {
   // e.g. a missing /uploads/img file — a plain 404, not a logged server error.
   if (err.status === 404 || err.statusCode === 404) return res.status(404).json({ error: 'Not found.' });
+  // Malformed or oversized request bodies are the sender's mistake, not ours.
+  if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'The request could not be read.' });
+  if (err.type === 'entity.too.large') return res.status(413).json({ error: 'That upload is too large.' });
   console.error(err);
   res.status(500).json({ error: 'Something went wrong on our end.' });
 });
@@ -105,6 +109,7 @@ const PORT = process.env.PORT || 4000;
 ensureSchema()
   .then(() => {
     app.listen(PORT, () => console.log(`Milady's API listening on http://localhost:${PORT}`));
+    startReviewReminders();
   })
   .catch((err) => {
     console.error('Failed to connect to the database. Check DATABASE_URL in server/.env');

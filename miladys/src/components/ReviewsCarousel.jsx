@@ -38,7 +38,7 @@ function readFileAsDataUrl(file) {
   });
 }
 
-export default function ReviewsCarousel({ productId }) {
+export default function ReviewsCarousel({ productId, onSummary }) {
   const { user } = useAuth();
   const [reviews, setReviews] = useState([]);
   const [summary, setSummary] = useState({ count: 0, average: 0 });
@@ -101,6 +101,13 @@ export default function ReviewsCarousel({ productId }) {
       active = false;
     };
   }, [productId]);
+
+  // Tell the product page, so the stars under the title stay in step.
+  const onSummaryRef = useRef(onSummary);
+  onSummaryRef.current = onSummary;
+  useEffect(() => {
+    if (loaded) onSummaryRef.current?.(summary);
+  }, [summary, loaded]);
 
   useEffect(() => {
     if (!zoomSrc) return undefined;

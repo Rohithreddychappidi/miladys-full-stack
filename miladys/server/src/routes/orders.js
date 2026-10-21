@@ -400,8 +400,14 @@ router.put('/admin/shipping', requireAdmin, async (req, res) => {
         const { rows: u } = await query('SELECT name, email FROM users WHERE id = $1', [o.user_id]);
         if (!u[0]) continue;
         const { rows: items } = await query('SELECT * FROM order_items WHERE order_id = $1', [o.id]);
-        if (o.shipping_status === 'shipped') await sendShippedEmail(u[0], o, items);
-        else await sendDeliveredEmail(u[0], o, items);
+        if (o.shipping_status === 'shipped') {
+          await sendShippedEmail(u[0], o, items);
+        } else {
+          // The Delivered email carries the review links, so the 7-day
+          // review reminder (lib/reviewReminders.js) isn't needed after it.
+          await query('UPDATE orders SET review_requested_at = COALESCE(review_requested_at, now()) WHERE id = $1', [o.id]);
+          await sendDeliveredEmail(u[0], o, items);
+        }
       }
     })().catch((err) => console.error('[orders/shipping] email failed', err.message));
   }

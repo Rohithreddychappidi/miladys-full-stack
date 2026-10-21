@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import RecommendedProducts from '../components/RecommendedProducts';
 import ReviewsCarousel from '../components/ReviewsCarousel';
+import RatingStars from '../components/RatingStars';
 import Testimonials from '../components/Testimonials';
 import CancellationPolicyCard from '../components/CancellationPolicyCard';
 import Seo, { SITE_URL } from '../components/Seo';
@@ -124,6 +125,9 @@ export default function ProductDetail() {
   const { whatsapp } = useStoreInfo();
 
   const [shareNote, setShareNote] = useState('');
+  // Live review summary from the reviews section (so posting a review
+  // updates the stars under the title); falls back to the product's own.
+  const [liveRating, setLiveRating] = useState(null); // { id, count, average }
 
   // Category names for the breadcrumb (Home > Category > Product).
   const [categoryNames, setCategoryNames] = useState({});
@@ -438,6 +442,15 @@ export default function ProductDetail() {
     setTimeout(() => setShareNote(''), 2500);
   }
 
+  const rating = liveRating?.id === product.id
+    ? liveRating
+    : { count: Number(product.rating_count) || 0, average: Number(product.rating_avg) || 0 };
+
+  function scrollToReviews(e) {
+    e.preventDefault();
+    document.getElementById('reviews')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   return (
     <div className="detail-page">
       <Seo
@@ -470,6 +483,16 @@ export default function ProductDetail() {
               ? 'https://schema.org/OutOfStock'
               : 'https://schema.org/InStock',
           },
+          // Lets Google show the star rating in search results.
+          ...(rating.count > 0 && {
+            aggregateRating: {
+              '@type': 'AggregateRating',
+              ratingValue: rating.average,
+              reviewCount: rating.count,
+              bestRating: 5,
+              worstRating: 1,
+            },
+          }),
         }]}
       />
       <div className="sparkle-bg sparkle-bg-detail" aria-hidden="true">
@@ -532,6 +555,13 @@ export default function ProductDetail() {
           {breadcrumbs('breadcrumbs-desktop')}
 
           <h1>{product.name}</h1>
+          {rating.count > 0 ? (
+            <a href="#reviews" className="title-rating" onClick={scrollToReviews} aria-label={`Rated ${rating.average} out of 5 from ${rating.count} review${rating.count === 1 ? '' : 's'}. See reviews.`}>
+              <RatingStars value={rating.average} size={14} />
+              <span>{rating.average.toFixed(1)}</span>
+              <span className="title-rating-count">· {rating.count} review{rating.count === 1 ? '' : 's'}</span>
+            </a>
+          ) : null}
           <div className="detail-price">
             <span className="price">{formatINR(product.price)}</span>
             {product.mrp > product.price && <span className="mrp">{formatINR(product.mrp)}</span>}
@@ -638,7 +668,7 @@ export default function ProductDetail() {
 
       <div className="container">
         <Testimonials testimonials={testimonials} />
-        <ReviewsCarousel productId={product.id} />
+        <ReviewsCarousel productId={product.id} onSummary={(sum) => setLiveRating({ id: product.id, ...sum })} />
       </div>
 
       <RecommendedProducts
@@ -965,6 +995,9 @@ export default function ProductDetail() {
         }
         .detail-actions { display: flex; gap: 12px; }
         .restock-btn { text-align: center; text-decoration: none; }
+        .title-rating { display: inline-flex; align-items: center; gap: 6px; margin: -4px 0 14px; font-size: 13px; color: var(--ink-700); text-decoration: none; }
+        .title-rating:hover .title-rating-count { text-decoration: underline; }
+        .title-rating-count { color: var(--ink-400); }
         .detail-secondary-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 18px; }
         .ask-whatsapp {
           display: inline-flex; align-items: center; gap: 8px;

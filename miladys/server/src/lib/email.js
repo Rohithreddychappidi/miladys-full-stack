@@ -369,6 +369,38 @@ export function sendDeliveredEmail(user, order, items = []) {
   });
 }
 
+// Sent automatically 7 days after an order shipped, if it was never marked
+// delivered (see lib/reviewReminders.js). One "Write a review" link per saree.
+export function sendReviewRequestEmail(user, order, items = []) {
+  const reviewable = items.filter((i) => i.product_id);
+  if (!reviewable.length) return Promise.resolve({ skipped: true });
+  const content = `
+    <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:400;color:${COLORS.maroon900};margin:0 0 6px;">
+      How was your saree?
+    </h1>
+    <p style="font-size:14px;line-height:1.7;color:${COLORS.ink600};margin:0 0 18px;">
+      Hi ${escapeHtml(user.name)}, we hope order <strong style="color:${COLORS.ink900};">#MLD${order.id}</strong> reached you safely.
+      A quick review — even just the stars — helps other customers choose, and means a lot to us.
+    </p>
+    <ul style="padding-left:18px;margin:0 0 6px;font-size:13px;color:${COLORS.ink600};">
+      ${reviewable.map((i) => `<li style="margin-bottom:4px;">${escapeHtml(i.product_name)}${i.color ? ` (${escapeHtml(i.color)})` : ''} — <a href="${siteUrl}/products/${encodeURIComponent(i.product_id)}?review=1#reviews" style="color:${COLORS.maroon900};">Write a review</a></li>`).join('')}
+    </ul>
+    <p style="font-size:12.5px;line-height:1.7;color:${COLORS.ink400};margin:14px 0 0;">
+      Haven't received it yet, or something isn't right? Reach us on WhatsApp or through the Contact page.
+    </p>
+  `;
+  return send({
+    to: user.email,
+    subject: `How was your saree? — #MLD${order.id} · Milady's`,
+    html: layout({
+      preheader: 'Tell us what you think — it takes a minute',
+      content,
+      ctaLabel: 'Write a review',
+      ctaUrl: `${siteUrl}/products/${encodeURIComponent(reviewable[0].product_id)}?review=1#reviews`,
+    }),
+  });
+}
+
 // A customer used the Contact page form — notify the store.
 export function sendContactNotification(storeEmail, msg) {
   const row = (label, value) => (value ? `<p style="margin:0 0 6px;font-size:13px;color:${COLORS.ink900};"><strong>${label}:</strong> ${escapeHtml(value)}</p>` : '');

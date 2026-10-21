@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { formatINR } from '../data/store';
+import RatingStars from './RatingStars';
 
 export default function ProductCard({ product, hidePrice = false }) {
   const stock = Number(product.stock);
@@ -20,6 +21,12 @@ export default function ProductCard({ product, hidePrice = false }) {
       </div>
       <div className="product-info">
         <p className="product-name">{product.name}</p>
+        {Number(product.rating_count) > 0 && (
+          <div className="card-rating" aria-label={`Rated ${product.rating_avg} out of 5 from ${product.rating_count} reviews`}>
+            <RatingStars value={product.rating_avg} size={12} />
+            <span>{Number(product.rating_avg).toFixed(1)} ({product.rating_count})</span>
+          </div>
+        )}
         {colors.length > 1 && (
           <div className="card-colors" aria-label={`Available in ${colors.length} colours: ${colors.map((c) => c.name).join(', ')}`}>
             {colors.slice(0, 5).map((c, i) => (
@@ -71,6 +78,7 @@ export default function ProductCard({ product, hidePrice = false }) {
         .card-color-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.15); }
         .card-colors-more { font-size: 11px; color: var(--ink-400); }
         .product-info { padding: 12px 2px 0; }
+        .card-rating { display: flex; align-items: center; gap: 5px; margin: -2px 0 6px; font-size: 11.5px; color: var(--ink-400); }
         .product-name {
           font-size: 13.5px;
           color: var(--ink-900);

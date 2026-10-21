@@ -183,6 +183,10 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_fee INTEGER NOT NULL DEFAUL
 -- Fulfilment, separate from payment status: pending (not yet sent) →
 -- shipped (courier + tracking) → delivered. Set from Admin → Orders.
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_status TEXT NOT NULL DEFAULT 'pending';
+-- When the "how was your saree?" email went out for an order (either with
+-- the Delivered email, or automatically 7 days after shipping if the order
+-- was never marked delivered). Set once, so it's never sent twice.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS review_requested_at TIMESTAMPTZ;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS courier TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_number TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_url TEXT;

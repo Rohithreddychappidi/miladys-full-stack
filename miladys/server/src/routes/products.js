@@ -9,6 +9,9 @@ const router = Router();
 // the single-product page needs. `colors` is trimmed in mapProductList.
 const LIST_COLUMNS = 'id, name, category_id, price, mrp, stock, description, image, colors, active, created_at';
 const MAX_LIMIT = 60;
+// Star rating from published reviews, for the product page and cards.
+const RATING_COLUMNS = `(SELECT ROUND(AVG(r.rating)::numeric, 1)::float FROM reviews r WHERE r.product_id = products.id AND r.status = 'published') AS rating_avg,
+  (SELECT COUNT(*)::int FROM reviews r WHERE r.product_id = products.id AND r.status = 'published') AS rating_count`;
 
 // Builds the WHERE clause shared by the public list and the admin list.
 function buildFilters({ category, q, exclude, ids }, { includeHidden = false } = {}) {
@@ -41,7 +44,7 @@ async function listProducts(req, res, { includeHidden }) {
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 12, 1), MAX_LIMIT);
   const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
 
-  let sql = `SELECT ${LIST_COLUMNS}, COUNT(*) OVER() AS total_count FROM products ${where} ORDER BY ${order}`;
+  let sql = `SELECT ${LIST_COLUMNS}, ${RATING_COLUMNS}, COUNT(*) OVER() AS total_count FROM products ${where} ORDER BY ${order}`;
   if (paginate) {
     params.push(limit, (page - 1) * limit);
     sql += ` LIMIT $${params.length - 1} OFFSET $${params.length}`;
@@ -93,8 +96,8 @@ router.get('/admin/:id', requireAdmin, async (req, res) => {
 router.get('/:id', async (req, res) => {
   // Admins can open hidden products too (see /admin/:id above).
   const { rows } = req.user?.isAdmin
-    ? await query('SELECT * FROM products WHERE id = $1', [req.params.id])
-    : await query('SELECT * FROM products WHERE id = $1 AND active = true', [req.params.id]);
+    ? await query(`SELECT *, ${RATING_COLUMNS} FROM products WHERE id = $1`, [req.params.id])
+    : await query(`SELECT *, ${RATING_COLUMNS} FROM products WHERE id = $1 AND active = true`, [req.params.id]);
   if (!rows[0]) return res.status(404).json({ error: 'Product not found.' });
   res.json({ product: mapProduct(rows[0]) });
 });
