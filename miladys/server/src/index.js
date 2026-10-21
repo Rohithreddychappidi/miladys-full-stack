@@ -75,14 +75,9 @@ app.use(cors({
 // registered before the JSON parser.
 app.post('/api/orders/webhook', express.raw({ type: '*/*', limit: '1mb' }), razorpayWebhook);
 
-// Request size: photos and videos are sent as base64 (about a third larger
-// than the file), so the routes that take uploads get real headroom —
-// admin content, review photos and the upload endpoint. Everything else
-// only ever sends small forms.
-const bigJson = express.json({ limit: '30mb' });
-const smallJson = express.json({ limit: '200kb' });
-const UPLOAD_ROUTES = /^\/api\/(uploads|products|categories|home-sections|testimonials)(\/|$)/;
-app.use((req, res, next) => (UPLOAD_ROUTES.test(req.path) ? bigJson : smallJson)(req, res, next));
+// Request size: photos and videos are sent as base64, which is about a
+// third larger than the file, so this needs headroom (~15 MB files).
+app.use(express.json({ limit: '20mb' }));
 app.use(attachUser);
 app.use(absoluteUploadUrls);
 

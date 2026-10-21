@@ -90,6 +90,18 @@ function HeroSlidesEditor({ slides = [], onChange, sizeHint }) {
   async function handleFiles(e, type) {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
+    // A save can carry up to 20 MB, and a video grows by about a third on
+    // the way, so keep what's added in one go under ~14 MB.
+    if (type === 'video') {
+      const mb = files.reduce((sum, f) => sum + f.size, 0) / 1024 / 1024;
+      if (mb > 14) {
+        window.alert(files.length > 1
+          ? `These videos add up to ${mb.toFixed(1)} MB. Please add them one at a time (save after each), and keep each under 14 MB.`
+          : `This video is ${mb.toFixed(1)} MB — please use one under 14 MB. A short clip (a few seconds) compressed with a free tool like HandBrake is ideal, and loads faster for customers.`);
+        e.target.value = '';
+        return;
+      }
+    }
     setBusy(true);
     try {
       // Images get resized/compressed like everywhere else. Video can't
