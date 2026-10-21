@@ -8,6 +8,7 @@ const statusLabels = {
   paid: 'Paid',
   paid_oversold: 'Needs attention',
   created: 'Payment pending',
+  expired: 'Expired (unpaid)',
   failed: 'Failed',
   cancelled: 'Cancelled',
 };
@@ -26,7 +27,7 @@ const TABS = [
   { key: 'attention', label: 'Needs attention', test: (o) => o.status === 'paid_oversold' },
   { key: 'created', label: 'Payment pending', test: (o) => o.status === 'created' },
   { key: 'cancelled', label: 'Cancelled', test: (o) => o.status === 'cancelled' },
-  { key: 'failed', label: 'Failed', test: (o) => o.status === 'failed' },
+  { key: 'failed', label: 'Failed / expired', test: (o) => o.status === 'failed' || o.status === 'expired' },
 ];
 
 const DATES = [
@@ -77,7 +78,7 @@ function waMessage(o) {
     const track = [o.courier, o.tracking_number && `tracking no. ${o.tracking_number}`].filter(Boolean).join(', ');
     return `Hi ${name}, your Milady's order ${no} has been shipped${track ? ` (${track})` : ''}.${o.tracking_url ? ` Track it here: ${o.tracking_url}` : ''}`;
   }
-  if (o.status === 'created') return `Hi ${name}, this is Milady's. We noticed your order ${no} wasn't completed — the payment didn't go through. You can retry from My Orders on our website, or reply here if you need help.`;
+  if (o.status === 'created' || o.status === 'expired') return `Hi ${name}, this is Milady's. We noticed your order ${no} wasn't completed — the payment didn't go through. You can retry from My Orders on our website, or reply here if you need help.`;
   return `Hi ${name}, this is Milady's about your order ${no}.`;
 }
 
@@ -479,6 +480,7 @@ export default function AdminOrders() {
         .status-failed { background: #f6e3e3; color: #a13a3a; }
         .status-paid_oversold { background: #fbeacb; color: #8a5a10; }
         .status-cancelled { background: var(--stone-200); color: var(--ink-600); }
+        .status-expired { background: var(--stone-200); color: var(--ink-600); }
         .ship-pending { background: #fff3d6; color: #8a5a10; }
         .ship-shipped { background: #e3ecf8; color: #2b4f86; }
         .ship-delivered { background: #e8f2e6; color: #3c7a3c; }

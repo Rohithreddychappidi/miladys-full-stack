@@ -5,6 +5,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { query } from '../db.js';
 import { signToken, requireAuth } from '../middleware/auth.js';
 import { sendLoginEmail, sendPasswordResetEmail } from '../lib/email.js';
+import { limits } from '../middleware/rateLimit.js';
 
 const router = Router();
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').toLowerCase();
@@ -15,7 +16,7 @@ const RESET_TOKEN_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const SITE_URL = (process.env.CLIENT_URL || 'http://localhost:5173').split(',')[0].trim();
 const googleClient = process.env.GOOGLE_CLIENT_ID ? new OAuth2Client(process.env.GOOGLE_CLIENT_ID) : null;
 
-router.post('/signup', async (req, res) => {
+router.post('/signup', ...limits.signup, async (req, res) => {
   const { name, email, password, mobile } = req.body || {};
   if (!name?.trim() || !email?.trim() || !password || password.length < 6) {
     return res.status(400).json({ error: 'Name, email and a password (6+ chars) are required.' });
@@ -41,7 +42,7 @@ router.post('/signup', async (req, res) => {
   res.status(201).json({ token, user: publicUser(user) });
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', ...limits.login, async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
 
@@ -66,7 +67,7 @@ router.post('/login', async (req, res) => {
 // token is verified here against Google's own keys before we trust
 // anything in it, so a forged/tampered token is rejected before it ever
 // reaches a database query.
-router.post('/google', async (req, res) => {
+router.post('/google', ...limits.google, async (req, res) => {
   if (!googleClient) {
     return res.status(503).json({ error: 'Google sign-in is not configured yet.' });
   }
@@ -121,7 +122,7 @@ router.post('/google', async (req, res) => {
 // otherwise the response itself would let someone check which emails have
 // an account (a common "user enumeration" issue with forgot-password
 // endpoints).
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', ...limits.forgotPassword, async (req, res) => {
   const { email } = req.body || {};
   if (!email?.trim()) return res.status(400).json({ error: 'Email is required.' });
 
@@ -149,7 +150,7 @@ router.post('/forgot-password', async (req, res) => {
   res.json({ ok: true, message: "If an account exists for that email, we've sent a password reset link." });
 });
 
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', ...limits.resetPassword, async (req, res) => {
   const { token, newPassword } = req.body || {};
   if (!token || !newPassword) return res.status(400).json({ error: 'Reset token and new password are required.' });
   if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters.' });
@@ -193,7 +194,7 @@ router.put('/me', requireAuth, async (req, res) => {
   res.json({ user: publicUser(rows[0]) });
 });
 
-router.post('/change-password', requireAuth, async (req, res) => {
+router.post('/change-password', requireAuth, ...limits.changePassword, async (req, res) => {
   const { currentPassword, newPassword } = req.body || {};
   if (!currentPassword || !newPassword) {
     return res.status(400).json({ error: 'Current and new password are required.' });

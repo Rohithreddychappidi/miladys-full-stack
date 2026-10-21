@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { query, pool } from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
-import { razorpay, razorpayEnabled, verifyPaymentSignature } from '../lib/razorpay.js';
-import { sendOrderConfirmationEmail, sendCancellationEmail, sendShippedEmail, sendDeliveredEmail } from '../lib/email.js';
+import { razorpay, razorpayEnabled, verifyPaymentSignature, verifyWebhookSignature } from '../lib/razorpay.js';
+import { confirmPaidOrder } from '../lib/payments.js';
+import { sendCancellationEmail, sendShippedEmail, sendDeliveredEmail } from '../lib/email.js';
 import { renderInvoice, renderInvoices } from '../lib/invoice.js';
 import { getStoreInfo } from '../lib/storeInfo.js';
 import { ingestFromRequest, thumbPath } from '../lib/images.js';
@@ -164,95 +165,45 @@ router.post('/verify', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Payment verification failed.' });
   }
 
-  // Mark paid only if the order is still awaiting payment ('created', or
-  // 'failed' after an earlier bad attempt). Doing the check inside the same
-  // UPDATE makes it atomic, so a confirmation that's sent twice (or
-  // replayed later — e.g. after the order was cancelled and refunded)
-  // can't mark it paid again or take the stock a second time.
-  const { rows } = await query(
-    `UPDATE orders SET status = 'paid', razorpay_payment_id = $1, paid_at = now()
-     WHERE razorpay_order_id = $2 AND user_id = $3 AND status IN ('created', 'failed') RETURNING *`,
-    [razorpay_payment_id, razorpay_order_id, req.user.id]
-  );
-  const order = rows[0];
-  if (!order) {
-    const { rows: existing } = await query(
-      'SELECT * FROM orders WHERE razorpay_order_id = $1 AND user_id = $2',
-      [razorpay_order_id, req.user.id]
-    );
-    const current = existing[0];
-    if (!current) return res.status(404).json({ error: 'Order not found.' });
-    // Same payment confirmed twice (double-sent by the browser): already
-    // done, so just report success without repeating any side effects.
-    if ((current.status === 'paid' || current.status === 'paid_oversold') && current.razorpay_payment_id === razorpay_payment_id) {
-      const { rows: items } = await query('SELECT * FROM order_items WHERE order_id = $1', [current.id]);
-      return res.json({ ok: true, order: current, items });
-    }
+  const { result, order, items } = await confirmPaidOrder({
+    razorpayOrderId: razorpay_order_id,
+    paymentId: razorpay_payment_id,
+    userId: req.user.id,
+  });
+  if (result === 'not_found') return res.status(404).json({ error: 'Order not found.' });
+  if (result === 'conflict') {
     return res.status(409).json({ error: 'This order can no longer be confirmed — it was already completed or cancelled.' });
   }
-
-  const { rows: items } = await query('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
-
-  // Decrement stock now that payment is confirmed — atomically per product,
-  // so two payments racing for the last unit can't both succeed in full.
-  // This matters most exactly when it's needed most: a sudden traffic
-  // spike where many people are checking out at once. If a product
-  // genuinely sells out between checkout and payment confirmation, the
-  // order is still honoured (money has already moved via Razorpay) but
-  // flagged 'paid_oversold' so it surfaces in Admin → Orders for manual
-  // follow-up (refund or restock) instead of silently going stock-negative
-  // or double-selling the same unit without anyone noticing.
-  const client = await pool.connect();
-  let oversold = false;
-  try {
-    await client.query('BEGIN');
-    for (const item of items) {
-      const { rows: updated } = await client.query(
-        `UPDATE products SET stock = stock - $1 WHERE id = $2 AND stock >= $1 RETURNING id`,
-        [item.qty, item.product_id]
-      );
-      let reserved = item.qty;
-      if (!updated.length) {
-        oversold = true;
-        // Only whatever was left (often 0) actually comes out of stock —
-        // record that, so a later cancellation doesn't put back units that
-        // never existed.
-        const { rows: prev } = await client.query(`SELECT stock FROM products WHERE id = $1 FOR UPDATE`, [item.product_id]);
-        reserved = Math.max(0, Math.min(item.qty, prev[0]?.stock ?? 0));
-        await client.query(`UPDATE products SET stock = 0 WHERE id = $1`, [item.product_id]);
-      }
-      await client.query(`UPDATE order_items SET stock_reserved = $1 WHERE id = $2`, [reserved, item.id]);
-    }
-
-    // Redeem the coupon now — not at "apply" time — so an abandoned
-    // checkout never burns the customer's one-time use of a code. The
-    // unique (coupon_id, user_id) constraint is the real guarantee here;
-    // ON CONFLICT DO NOTHING just makes a retried /verify call idempotent.
-    if (order.coupon_id) {
-      await client.query(
-        `INSERT INTO coupon_redemptions (coupon_id, user_id, order_id) VALUES ($1,$2,$3)
-         ON CONFLICT (coupon_id, user_id) DO NOTHING`,
-        [order.coupon_id, req.user.id, order.id]
-      );
-    }
-
-    if (oversold) {
-      await client.query(`UPDATE orders SET status = 'paid_oversold' WHERE id = $1`, [order.id]);
-      order.status = 'paid_oversold';
-    }
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('[orders/verify] stock/coupon finalize failed', err);
-  } finally {
-    client.release();
-  }
-
-  const { rows: userRows } = await query('SELECT * FROM users WHERE id = $1', [req.user.id]);
-  sendOrderConfirmationEmail(userRows[0], order, items).catch(() => {});
-
   res.json({ ok: true, order, items });
 });
+
+// POST /api/orders/webhook — Razorpay calls this itself when a payment is
+// captured (set up in Razorpay Dashboard → Webhooks, events
+// "payment.captured" and "order.paid", secret = RAZORPAY_WEBHOOK_SECRET).
+// Confirms orders even if the customer closed the browser after paying.
+// Mounted in index.js with the raw body, which the signature is over.
+export async function razorpayWebhook(req, res) {
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  if (!secret) return res.status(503).json({ error: 'Webhook not configured.' });
+  const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
+  if (!verifyWebhookSignature(raw, req.get('x-razorpay-signature') || '', secret)) {
+    return res.status(400).json({ error: 'Invalid signature.' });
+  }
+  let event;
+  try { event = JSON.parse(raw.toString('utf8')); } catch { return res.status(400).json({ error: 'Bad payload.' }); }
+  const payment = event?.payload?.payment?.entity;
+  if (['payment.captured', 'order.paid'].includes(event?.event) && payment?.order_id && payment.status === 'captured') {
+    try {
+      const { result, order } = await confirmPaidOrder({ razorpayOrderId: payment.order_id, paymentId: payment.id });
+      if (result === 'confirmed') console.log(`[webhook] order #MLD${order.id} confirmed by Razorpay`);
+      if (result === 'conflict') console.warn(`[webhook] payment ${payment.id} for an order that's ${order.status} — check Razorpay (may need a refund)`);
+    } catch (err) {
+      console.error('[webhook] confirm failed', err);
+      return res.status(500).json({ error: 'Could not process.' }); // Razorpay retries
+    }
+  }
+  res.json({ ok: true });
+}
 
 // POST /api/orders/:id/cancel — self-service cancellation for the order's
 // owner. Refund percentage comes entirely from the admin-editable

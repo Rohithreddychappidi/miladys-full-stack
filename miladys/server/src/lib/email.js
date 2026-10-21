@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { getStoreInfo, STORE_DEFAULTS } from './storeInfo.js';
 
 const apiKey = process.env.RESEND_API_KEY;
 const fromEmail = process.env.RESEND_FROM_EMAIL || "Milady's <onboarding@resend.dev>";
@@ -28,7 +29,10 @@ async function send({ to, subject, html, replyTo }) {
   try {
     // Resend reports a rejected email (bad address, unverified domain…) in
     // the result rather than throwing, so log that too.
-    const result = await resend.emails.send({ from: fromEmail, to, subject, html, ...(replyTo ? { replyTo } : {}) });
+    // Replies go to the store's real inbox (Admin → Footer & Contact): the
+    // sending address on themiladys.com has no mailbox behind it.
+    const reply = replyTo || (await getStoreInfo().then((st) => st.email).catch(() => STORE_DEFAULTS.email));
+    const result = await resend.emails.send({ from: fromEmail, to, subject, html, ...(reply ? { replyTo: reply } : {}) });
     if (result?.error) console.error('[email:error]', subject, '—', result.error.message || JSON.stringify(result.error));
     return result;
   } catch (err) {

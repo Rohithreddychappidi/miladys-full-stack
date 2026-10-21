@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS orders (
   user_id            INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   razorpay_order_id  TEXT UNIQUE,
   razorpay_payment_id TEXT,
-  status             TEXT NOT NULL DEFAULT 'created', -- created | paid | failed | paid_oversold | cancelled
+  status             TEXT NOT NULL DEFAULT 'created', -- created | paid | failed | paid_oversold | cancelled | expired (unpaid after 24h)
   subtotal           INTEGER NOT NULL,
   shipping_fee       INTEGER NOT NULL DEFAULT 0,
   coupon_id          INTEGER REFERENCES coupons(id) ON DELETE SET NULL,

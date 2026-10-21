@@ -11,6 +11,7 @@ const statusTone = {
   paid: 'tone-delivered',
   paid_oversold: 'tone-delivered',
   created: 'tone-processing',
+  expired: 'tone-cancelled',
   failed: 'tone-failed',
   cancelled: 'tone-cancelled',
 };
@@ -19,6 +20,7 @@ const statusLabel = {
   paid: 'Paid',
   paid_oversold: 'Paid',
   created: 'Payment pending',
+  expired: 'Not completed',
   failed: 'Payment failed',
   cancelled: 'Cancelled',
 };
@@ -30,7 +32,7 @@ const FILTERS = [
   { key: 'all', label: 'All', test: () => true },
   { key: 'active', label: 'In progress', test: (o) => isPaid(o) && shipping(o) !== 'delivered' },
   { key: 'delivered', label: 'Delivered', test: (o) => isPaid(o) && shipping(o) === 'delivered' },
-  { key: 'pending', label: 'Payment pending', test: (o) => o.status === 'created' || o.status === 'failed' },
+  { key: 'pending', label: 'Payment pending', test: (o) => ['created', 'failed', 'expired'].includes(o.status) },
   { key: 'cancelled', label: 'Cancelled', test: (o) => o.status === 'cancelled' },
 ];
 
@@ -213,7 +215,7 @@ export default function Orders() {
               const ship = shipping(o);
               // Once shipped, an order can't be self-cancelled (see Return policy).
               const canCancel = isPaid(o) && ship === 'pending' && tierFor(o);
-              const unpaid = o.status === 'created' || o.status === 'failed';
+              const unpaid = ['created', 'failed', 'expired'].includes(o.status);
               const stepIndex = STEPS.findIndex((st) => st.key === ship);
               return (
                 <div className="order-card" key={o.id}>

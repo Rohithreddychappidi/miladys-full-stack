@@ -24,7 +24,9 @@ export function verifyPaymentSignature({ orderId, paymentId, signature }) {
     .createHmac('sha256', keySecret)
     .update(`${orderId}|${paymentId}`)
     .digest('hex');
-  return expected === signature;
+  const a = Buffer.from(expected);
+  const b = Buffer.from(String(signature));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 // Verifies Razorpay webhook signatures (X-Razorpay-Signature header), for
@@ -32,5 +34,8 @@ export function verifyPaymentSignature({ orderId, paymentId, signature }) {
 // client never calls /verify (closed tab, network drop, etc).
 export function verifyWebhookSignature(rawBody, signatureHeader, webhookSecret) {
   const expected = crypto.createHmac('sha256', webhookSecret).update(rawBody).digest('hex');
-  return expected === signatureHeader;
+  // Constant-time compare, so the signature can't be guessed byte by byte.
+  const a = Buffer.from(expected);
+  const b = Buffer.from(String(signatureHeader));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }

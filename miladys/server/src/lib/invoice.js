@@ -23,6 +23,7 @@ function formatDate(d) {
 
 const STATUS_LABEL = {
   created: 'Payment Pending',
+  expired: 'Payment Not Completed',
   paid: 'Paid',
   paid_oversold: 'Paid',
   cancelled: 'Cancelled',

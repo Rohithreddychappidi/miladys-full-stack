@@ -7,6 +7,7 @@ import cors from 'cors';
 import compression from 'compression';
 import { ensureSchema } from './db.js';
 import { startReviewReminders } from './lib/reviewReminders.js';
+import { startPaymentChecks } from './lib/payments.js';
 import { attachUser } from './middleware/auth.js';
 import { absoluteUploadUrls, IMG_DIR } from './lib/images.js';
 
@@ -20,7 +21,7 @@ import categoryRoutes from './routes/categories.js';
 import productRoutes from './routes/products.js';
 import homeSectionRoutes from './routes/homeSections.js';
 import reviewRoutes from './routes/reviews.js';
-import orderRoutes from './routes/orders.js';
+import orderRoutes, { razorpayWebhook } from './routes/orders.js';
 import couponRoutes from './routes/coupons.js';
 import testimonialRoutes from './routes/testimonials.js';
 import cancellationPolicyRoutes from './routes/cancellationPolicy.js';
@@ -30,9 +31,23 @@ import contactRoutes from './routes/contact.js';
 
 const app = express();
 // Behind Nginx — lets req.protocol report https (used to build absolute
-// image URLs when PUBLIC_URL isn't set).
+// image URLs when PUBLIC_URL isn't set) and req.ip the visitor's address.
 app.set('trust proxy', 1);
+app.disable('x-powered-by');
 app.use(compression());
+
+// Standard protective headers. Images and videos here are shown on the
+// themiladys.com pages, so they must stay loadable cross-origin.
+app.use((_req, res, next) => {
+  res.set({
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    'Cross-Origin-Resource-Policy': 'cross-origin',
+  });
+  next();
+});
 
 // CLIENT_URL can be a single origin or a comma-separated list — handy once
 // you're on Vercel, since preview deployments get their own throwaway URL
@@ -56,10 +71,18 @@ app.use(cors({
     callback(new Error('Not allowed by CORS'));
   },
 }));
-// Raised from Express's 100kb default — the home-page CMS stores uploaded
-// hero photos/videos as base64 directly in the database, which inflates
-// file size by roughly a third, so this needs real headroom.
-app.use(express.json({ limit: '30mb' }));
+// Razorpay's payment notifications: signed over the raw body, so this is
+// registered before the JSON parser.
+app.post('/api/orders/webhook', express.raw({ type: '*/*', limit: '1mb' }), razorpayWebhook);
+
+// Request size: photos and videos are sent as base64 (about a third larger
+// than the file), so the routes that take uploads get real headroom —
+// admin content, review photos and the upload endpoint. Everything else
+// only ever sends small forms.
+const bigJson = express.json({ limit: '30mb' });
+const smallJson = express.json({ limit: '200kb' });
+const UPLOAD_ROUTES = /^\/api\/(uploads|products|categories|home-sections|testimonials)(\/|$)/;
+app.use((req, res, next) => (UPLOAD_ROUTES.test(req.path) ? bigJson : smallJson)(req, res, next));
 app.use(attachUser);
 app.use(absoluteUploadUrls);
 
@@ -110,6 +133,7 @@ ensureSchema()
   .then(() => {
     app.listen(PORT, () => console.log(`Milady's API listening on http://localhost:${PORT}`));
     startReviewReminders();
+    startPaymentChecks();
   })
   .catch((err) => {
     console.error('Failed to connect to the database. Check DATABASE_URL in server/.env');
