@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../data/api';
 import { compressImageFile } from '../../utils/compressImage';
 
@@ -9,6 +9,9 @@ export default function AdminCategories() {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [moving, setMoving] = useState(false);
+  const [productCounts, setProductCounts] = useState({});
   const fileInput = useRef(null);
 
   useEffect(() => {
@@ -19,6 +22,39 @@ export default function AdminCategories() {
     // The admin list needs to see hidden categories too (to unhide them),
     // unlike the public storefront endpoint used everywhere else.
     api.getAllCategoriesAdmin().then(({ categories }) => setCategories(categories)).catch((err) => setError(err.message));
+    api.getAllProductsAdmin()
+      .then(({ products }) => {
+        const counts = {};
+        for (const p of products || []) counts[p.category] = (counts[p.category] || 0) + 1;
+        setProductCounts(counts);
+      })
+      .catch(() => {});
+  }
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return categories;
+    return categories.filter((c) => [c.name, c.tagline, c.id].some((v) => String(v || '').toLowerCase().includes(q)));
+  }, [categories, search]);
+
+  // Move a category one place up/down. The new order is saved for the whole
+  // list at once, and is the order used on the home page and products page.
+  async function handleMove(index, dir) {
+    const next = [...categories];
+    const target = index + dir;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    setCategories(next);
+    setMoving(true);
+    try {
+      const { categories: saved } = await api.reorderCategories(next.map((c) => c.id));
+      setCategories(saved);
+    } catch (err) {
+      setError(err.message);
+      refresh();
+    } finally {
+      setMoving(false);
+    }
   }
 
   function handleImage(e) {
@@ -42,10 +78,15 @@ export default function AdminCategories() {
         await api.updateCategory(editingId, { name: form.name, tagline: form.tagline, image: form.image || undefined });
       } else {
         const id = form.name.trim().toLowerCase().replace(/\s+/g, '-');
+        if (categories.some((c) => c.id === id)) {
+          setError(`A category called "${form.name.trim()}" already exists — edit that one instead.`);
+          return;
+        }
         await api.createCategory({
           id,
           name: form.name,
           tagline: form.tagline,
+          sortOrder: categories.length + 1, // new categories go to the end
           image: form.image || 'https://images.unsplash.com/photo-1717585679395-bbe39b5fb6bc?auto=format&fit=crop&w=800&q=80',
         });
       }
@@ -95,7 +136,7 @@ export default function AdminCategories() {
     <div>
       <div className="admin-page-head">
         <h1>Categories</h1>
-        <p>Add the saree types shown on the homepage and products page. Each needs a small photo.</p>
+        <p>Add the saree types shown on the homepage and products page. Each needs a small photo. Use the ↑ ↓ arrows to change the order they appear in on the website.</p>
       </div>
 
       {error && <p className="admin-error">{error}</p>}
@@ -147,13 +188,34 @@ export default function AdminCategories() {
         </form>
 
         <div className="cms-list">
+          <div className="cat-toolbar">
+            <input
+              type="search"
+              className="cat-search"
+              placeholder="Search categories…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search categories"
+            />
+            <span className="cat-count">{search ? `${visible.length} of ${categories.length}` : `${categories.length} categories`}</span>
+          </div>
           {categories.length === 0 && <p className="empty">No categories yet.</p>}
-          {categories.map((c) => (
+          {categories.length > 0 && visible.length === 0 && <p className="empty">No categories match &ldquo;{search}&rdquo;.</p>}
+          {visible.map((c) => {
+            const index = categories.indexOf(c);
+            return (
             <div className={`cms-row ${c.active === false ? 'is-hidden' : ''}`} key={c.id}>
+              {!search && (
+                <div className="order-btns">
+                  <button type="button" onClick={() => handleMove(index, -1)} disabled={moving || index === 0} aria-label={`Move ${c.name} up`}>↑</button>
+                  <button type="button" onClick={() => handleMove(index, 1)} disabled={moving || index === categories.length - 1} aria-label={`Move ${c.name} down`}>↓</button>
+                </div>
+              )}
               <img src={c.image} alt="" className="row-thumb" />
               <div className="row-info">
                 <strong>{c.name}</strong>
                 <span>{c.tagline}</span>
+                <span className="row-products">{productCounts[c.id] || 0} {productCounts[c.id] === 1 ? 'saree' : 'sarees'}</span>
               </div>
               {c.active === false && <span className="hidden-badge">Hidden</span>}
               <div className="row-actions">
@@ -164,7 +226,8 @@ export default function AdminCategories() {
                 <button onClick={() => handleDelete(c.id)} className="danger">Delete</button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -231,6 +294,13 @@ export default function AdminCategories() {
           flex: 0 0 auto;
         }
         .empty { color: var(--ink-400); font-size: 13.5px; }
+        .cat-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+        .cat-search { flex: 1; max-width: 360px; padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--stone-200); font-size: 13.5px; background: var(--paper); }
+        .cat-count { font-size: 12px; color: var(--ink-400); }
+        .order-btns { display: flex; flex-direction: column; gap: 2px; }
+        .order-btns button { width: 26px; height: 22px; border: 1px solid var(--stone-200); border-radius: 4px; background: var(--paper); color: var(--maroon-900); font-size: 12px; line-height: 1; cursor: pointer; }
+        .order-btns button:disabled { opacity: 0.3; cursor: default; }
+        .row-info .row-products { font-size: 11.5px; color: var(--ink-500); }
         @media (max-width: 900px) {
           .cms-layout { grid-template-columns: 1fr; }
         }

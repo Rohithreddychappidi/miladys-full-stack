@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../data/api';
+import { ABOUT_VALUES_DEFAULT } from '../../data/aboutDefaults';
 import { compressImageFile } from '../../utils/compressImage';
 
 function GalleryEditor({ images = [], onChange }) {
@@ -57,6 +58,8 @@ export default function AdminAbout() {
   const [error, setError] = useState('');
   const [savedKey, setSavedKey] = useState('');
   const storyFileInput = useRef(null);
+  // The three cards under the story ("Sourced Direct", "Hand-Checked", …).
+  const [values, setValues] = useState(ABOUT_VALUES_DEFAULT.map((v) => ({ ...v })));
 
   useEffect(() => {
     api
@@ -67,6 +70,8 @@ export default function AdminAbout() {
         const map = {};
         relevant.forEach((s) => { map[s.section_key] = { ...s.content, enabled: s.enabled }; });
         setDrafts(map);
+        const saved = all.find((s) => s.section_key === 'about_values')?.content?.items;
+        setValues(Array.isArray(saved) ? [0, 1, 2].map((i) => ({ title: saved[i]?.title || '', text: saved[i]?.text || '' })) : ABOUT_VALUES_DEFAULT.map((v) => ({ ...v })));
       })
       .catch((err) => setError(err.message));
   }, []);
@@ -103,6 +108,22 @@ export default function AdminAbout() {
         return exists ? prev.map((s) => (s.section_key === key ? section : s)) : [...prev, section];
       });
       setSavedKey(key);
+      setTimeout(() => setSavedKey(''), 2000);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  function updateValue(i, field, value) {
+    setValues((prev) => prev.map((v, idx) => (idx === i ? { ...v, [field]: value } : v)));
+  }
+
+  async function handleSaveValues() {
+    setError('');
+    try {
+      const items = values.map((v) => ({ title: v.title.trim(), text: v.text.trim() }));
+      await api.updateHomeSection('about_values', { content: { items }, enabled: true, title: 'About Page — Values', sortOrder: 10 });
+      setSavedKey('about_values');
       setTimeout(() => setSavedKey(''), 2000);
     } catch (err) {
       setError(err.message);
@@ -193,6 +214,30 @@ export default function AdminAbout() {
             {savedKey === 'about_story' && <span className="saved-msg">Saved ✓</span>}
           </div>
         </div>
+
+        <div className="section-card">
+          <div className="section-card-head">
+            <h3>Values</h3>
+          </div>
+          <p className="field-hint values-hint">The three cards shown below the story (for example &ldquo;Sourced Direct&rdquo;). Leave a card&apos;s heading and description empty to hide it.</p>
+          {values.map((v, i) => (
+            <div className="value-edit" key={i}>
+              <p className="value-edit-label">Card {i + 1}</p>
+              <label className="field-label">
+                Heading
+                <input type="text" value={v.title} maxLength={60} onChange={(e) => updateValue(i, 'title', e.target.value)} />
+              </label>
+              <label className="field-label">
+                Description
+                <textarea rows="2" value={v.text} maxLength={220} onChange={(e) => updateValue(i, 'text', e.target.value)} />
+              </label>
+            </div>
+          ))}
+          <div className="section-card-foot">
+            <button className="btn btn-primary" onClick={handleSaveValues}>Save</button>
+            {savedKey === 'about_values' && <span className="saved-msg">Saved ✓</span>}
+          </div>
+        </div>
       </div>
 
       <style>{`
@@ -211,6 +256,9 @@ export default function AdminAbout() {
           gap: 14px;
         }
         .section-card-head { display: flex; align-items: center; justify-content: space-between; }
+        .values-hint { margin: -4px 0 4px; }
+        .value-edit { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-top: 1px solid var(--stone-100); }
+        .value-edit-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-400); margin: 0; }
         .section-card-head h3 { font-family: var(--font-display); font-size: 16px; color: var(--maroon-900); margin: 0; }
 
         .field-label { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--ink-600); }

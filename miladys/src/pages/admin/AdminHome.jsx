@@ -243,7 +243,10 @@ export default function AdminHome() {
   useEffect(() => {
     api
       .getAllHomeSections()
-      .then(({ sections }) => {
+      .then(({ sections: all }) => {
+        // Only real home-page sections. About page, policy pages, store
+        // details and social links have their own admin pages.
+        const sections = all.filter((s) => sectionLabels[s.section_key] && s.section_key !== 'social_links');
         setSections(sections);
         const map = {};
         sections.forEach((s) => { map[s.section_key] = { ...s.content, enabled: s.enabled }; });

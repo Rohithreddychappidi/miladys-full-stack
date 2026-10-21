@@ -84,6 +84,8 @@ export default function AdminProducts() {
   const [galleryLoaded, setGalleryLoaded] = useState(true);
   const [listQuery, setListQuery] = useState('');
   const [listCategory, setListCategory] = useState('');
+  // ?stock=out / low lets the dashboard link straight to a filtered list.
+  const [listStock, setListStock] = useState(() => new URLSearchParams(window.location.search).get('stock') || '');
 
   useEffect(() => {
     refresh();
@@ -421,12 +423,18 @@ export default function AdminProducts() {
 
   const stockNum = form.stock === '' ? null : Number(form.stock) || 0;
   const listQueryLower = listQuery.trim().toLowerCase();
+  const stockMatches = (p) => {
+    if (listStock === 'out') return p.stock === 0;
+    if (listStock === 'low') return p.stock > 0 && p.stock <= 5;
+    if (listStock === 'in') return p.stock > 0;
+    if (listStock === 'hidden') return p.active === false;
+    return true;
+  };
+  const outOfStockCount = products.filter((p) => p.stock === 0).length;
   const listedProducts = products.filter((p) =>
     (!listCategory || p.category === listCategory) &&
+    stockMatches(p) &&
     (!listQueryLower || p.name.toLowerCase().includes(listQueryLower) || p.id.toLowerCase().includes(listQueryLower)));
-  const productsInCategory = form.category
-    ? products.filter((p) => p.category === form.category && p.id !== editingId)
-    : [];
 
   return (
     <div>
@@ -485,41 +493,19 @@ export default function AdminProducts() {
               </div>
             )}
 
-            <div className="category-picker">
-              <label>
-                Category
-                <select
-                  value={form.category}
-                  onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                  required
-                >
-                  <option value="" disabled>Choose a category</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </label>
-
-              {form.category && (
-                <div className="category-preview">
-                  <p className="category-preview-title">
-                    Already in {categoryName(form.category)} ({productsInCategory.length})
-                  </p>
-                  {productsInCategory.length === 0 ? (
-                    <p className="category-preview-empty">Nothing here yet — this'll be the first.</p>
-                  ) : (
-                    <div className="category-preview-list">
-                      {productsInCategory.map((p) => (
-                        <div className="category-preview-item" key={p.id}>
-                          <img src={p.thumb || thumbUrl(p.image)} alt="" loading="lazy" />
-                          <span>{p.name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+            <label>
+              Category
+              <select
+                value={form.category}
+                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                required
+              >
+                <option value="" disabled>Choose a category</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </label>
 
             <label>
               Description
@@ -788,6 +774,13 @@ export default function AdminProducts() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            <select value={listStock} onChange={(e) => setListStock(e.target.value)} aria-label="Filter by stock">
+              <option value="">All stock</option>
+              <option value="in">In stock</option>
+              <option value="low">Low stock (1–5 left)</option>
+              <option value="out">Out of stock ({outOfStockCount})</option>
+              <option value="hidden">Hidden from site</option>
+            </select>
             <span className="list-count">{listedProducts.length} of {products.length}</span>
           </div>
           {products.length === 0 && <p className="empty">No products yet.</p>}
@@ -924,24 +917,6 @@ export default function AdminProducts() {
         .field-hint { font-size: 11.5px; color: var(--ink-400); line-height: 1.6; }
         .pricing-hint { margin: -4px 0 12px; }
 
-        .category-picker { display: flex; gap: 14px; align-items: flex-start; }
-        .category-picker > label { flex: 1; min-width: 0; }
-        .category-preview {
-          flex: 0 0 170px;
-          border: 1px solid var(--stone-200);
-          border-radius: var(--radius-sm);
-          padding: 10px;
-          max-height: 168px;
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-        .category-preview-title { font-size: 11px; font-weight: 600; color: var(--ink-600); margin: 0; }
-        .category-preview-empty { font-size: 11.5px; color: var(--ink-400); margin: 0; line-height: 1.5; }
-        .category-preview-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
-        .category-preview-item { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--ink-600); }
-        .category-preview-item img { width: 26px; height: 26px; border-radius: 6px; object-fit: cover; flex: 0 0 auto; }
-        .category-preview-item span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .stock-warning {
           font-size: 11.5px;
           color: #8a5a10;
@@ -1163,8 +1138,6 @@ export default function AdminProducts() {
 
         @media (max-width: 640px) {
           .form-row { grid-template-columns: 1fr; }
-          .category-picker { flex-direction: column; }
-          .category-preview { flex-basis: auto; width: 100%; }
           .cms-row { flex-wrap: wrap; }
           .row-info { flex-basis: 100%; order: 1; }
           .row-thumb-sq { order: 0; }

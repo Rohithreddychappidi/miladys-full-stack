@@ -1,13 +1,35 @@
 import { useState } from 'react';
 import RecommendedProducts from '../components/RecommendedProducts';
 import Seo from '../components/Seo';
+import { api } from '../data/api';
+import { addressInline, instagramHandle, lines, mapEmbedUrl, telHref, useStoreInfo, waHref } from '../data/storeInfo';
 
 export default function Contact() {
+  const info = useStoreInfo();
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
 
-  function handleSubmit(e) {
+  // Messages are saved to Admin → Messages and emailed to the store.
+  // (This form used to show "Message received" without sending anything.)
+  async function handleSubmit(e) {
     e.preventDefault();
-    setSent(true);
+    const form = new FormData(e.currentTarget);
+    setSending(true);
+    setError('');
+    try {
+      await api.submitContact({
+        name: form.get('name'),
+        contact: form.get('contact'),
+        message: form.get('message'),
+        website: form.get('website'),
+      });
+      setSent(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -27,48 +49,64 @@ export default function Contact() {
           </p>
 
           <dl className="info-list">
+            {info.phone && (
             <div>
               <dt>Phone</dt>
-              <dd><a href="tel:+917842225444">+91 78422 25444</a></dd>
+              <dd><a href={telHref(info.phone)}>{info.phone}</a></dd>
             </div>
+            )}
+            {info.whatsapp && (
             <div>
               <dt>WhatsApp</dt>
               <dd>
-                <a href="https://wa.me/917842225444" target="_blank" rel="noreferrer" className="whatsapp-link">
+                <a href={waHref(info.whatsapp)} target="_blank" rel="noreferrer" className="whatsapp-link">
                   <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.7-1.2A9 9 0 1 0 12 3z" stroke="currentColor" strokeWidth="1.5" />
                     <path d="M8.5 8.7c.2-.5.4-.5.6-.5h.5c.2 0 .4 0 .6.4.2.5.7 1.6.7 1.7.1.1.1.3 0 .4-.1.2-.2.3-.3.4l-.4.5c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.6-.7c.2-.2.4-.2.6-.1l1.5.7c.2.1.4.2.4.4.1.5-.1 1.4-.6 1.8-.6.5-1.6.8-2.6.5-1.8-.5-3.7-1.6-5.1-3.1-1.3-1.3-2.1-2.7-2.4-3.4-.3-.7-.4-1.7.2-2.4z" fill="currentColor" />
                   </svg>
-                  +91 78422 25444
+                  {info.whatsapp.length > 10 ? `+${info.whatsapp.slice(0, info.whatsapp.length - 10)} ${info.whatsapp.slice(-10, -5)} ${info.whatsapp.slice(-5)}` : info.whatsapp}
                 </a>
               </dd>
             </div>
+            )}
+            {info.email && (
             <div>
               <dt>Email</dt>
-              <dd><a href="mailto:themiladysofficial@gmail.com">themiladysofficial@gmail.com</a></dd>
+              <dd><a href={`mailto:${info.email}`}>{info.email}</a></dd>
             </div>
+            )}
+            {info.address && (
             <div>
               <dt>Store</dt>
               <dd>
-                Flat No. 402, JM&apos;s CNR Tower, Srinagar, Kakinada, A.P. 533003
-                <br />
-                <a href="https://maps.app.goo.gl/5VFnXKQRaPAT8UxC7" target="_blank" rel="noreferrer" className="directions-link">Get Directions →</a>
+                {addressInline(info.address)}
+                {info.mapsLink && (
+                  <>
+                    <br />
+                    <a href={info.mapsLink} target="_blank" rel="noreferrer" className="directions-link">Get Directions →</a>
+                  </>
+                )}
               </dd>
             </div>
+            )}
+            {info.hours && (
             <div>
               <dt>Hours</dt>
-              <dd>Mon – Sat, 10am – 9pm · Sunday, 10am – 7pm</dd>
+              <dd>{lines(info.hours).join(' · ')}</dd>
             </div>
+            )}
+            {info.instagram && (
             <div>
               <dt>Instagram</dt>
-              <dd><a href="https://www.instagram.com/themiladys_" target="_blank" rel="noreferrer">@themiladys_</a></dd>
+              <dd><a href={info.instagram} target="_blank" rel="noreferrer">{instagramHandle(info.instagram)}</a></dd>
             </div>
+            )}
           </dl>
 
           <div className="map-embed">
             <iframe
               title="Milady's store location"
-              src="https://maps.google.com/maps?q=Flat%20No.%20402%2C%20JM%27s%20CNR%20Tower%2C%20Srinagar%2C%20Kakinada%2C%20Andhra%20Pradesh%20533003&output=embed"
+              src={mapEmbedUrl(info.address)}
               loading="lazy"
               referrerPolicy="no-referrer-when-downgrade"
             />
@@ -78,7 +116,7 @@ export default function Contact() {
         <form className="contact-form" onSubmit={handleSubmit}>
           {sent ? (
             <div className="form-sent">
-              <h3>Message received</h3>
+              <h3>Message sent</h3>
               <p>Thank you — someone from Milady&apos;s will get back to you shortly.</p>
             </div>
           ) : (
@@ -93,9 +131,12 @@ export default function Contact() {
               </label>
               <label>
                 Message
-                <textarea name="message" rows="5" required placeholder="Tell us what you're looking for" />
+                <textarea name="message" rows="5" required maxLength={4000} placeholder="Tell us what you're looking for" />
               </label>
-              <button type="submit" className="btn btn-primary">Send Message</button>
+              {/* Spam trap: hidden from people, filled in by bots. */}
+              <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" className="hp-field" />
+              {error && <p className="form-error" role="alert">{error}</p>}
+              <button type="submit" className="btn btn-primary" disabled={sending}>{sending ? 'Sending…' : 'Send Message'}</button>
             </>
           )}
         </form>
@@ -105,6 +146,8 @@ export default function Contact() {
 
       <style>{`
         .contact-page { padding: 70px 0 0; }
+        .hp-field { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+        .form-error { font-size: 13px; color: #a13a3a; margin: 0; }
         .contact-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;

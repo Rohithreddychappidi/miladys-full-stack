@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { api } from '../../data/api';
 import { useAuth } from '../../context/AuthContext';
 import Seo from '../../components/Seo';
 
@@ -10,11 +11,30 @@ const links = [
   { to: '/admin/categories', label: 'Categories' },
   { to: '/admin/products', label: 'Products' },
   { to: '/admin/orders', label: 'Orders' },
+  { to: '/admin/messages', label: 'Messages', badge: 'messages' },
   { to: '/admin/coupons', label: 'Coupons' },
   { to: '/admin/cancellation-policy', label: 'Cancellation Policy' },
   { to: '/admin/reviews', label: 'Reviews' },
   { to: '/admin/testimonials', label: 'Testimonials' },
+  { to: '/admin/store', label: 'Footer & Contact' },
+  { to: '/admin/policies', label: 'Policy Pages' },
 ];
+
+// Number of unread Contact-form messages, for the badge in the menu.
+// Refreshes on navigation and when the Messages page changes something.
+function useUnreadMessages(enabled) {
+  const [unread, setUnread] = useState(0);
+  const location = useLocation();
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let active = true;
+    const load = () => api.getUnreadMessages().then(({ unread: n }) => active && setUnread(n)).catch(() => {});
+    load();
+    window.addEventListener('admin-messages-changed', load);
+    return () => { active = false; window.removeEventListener('admin-messages-changed', load); };
+  }, [enabled, location.pathname]);
+  return unread;
+}
 
 function AdminLoginGate() {
   const { login } = useAuth();
@@ -71,6 +91,7 @@ function AdminLoginGate() {
 
 export default function AdminLayout() {
   const { user, loading, isAdmin, logout } = useAuth();
+  const unread = useUnreadMessages(Boolean(user && isAdmin));
 
   if (loading) return null;
   if (!user || !isAdmin) return <AdminLoginGate />;
@@ -91,6 +112,7 @@ export default function AdminLayout() {
               className={({ isActive }) => 'admin-link' + (isActive ? ' active' : '')}
             >
               {l.label}
+              {l.badge === 'messages' && unread > 0 && <span className="nav-badge" aria-label={`${unread} unread`}>{unread}</span>}
             </NavLink>
           ))}
         </nav>
@@ -149,6 +171,8 @@ export default function AdminLayout() {
         }
         .admin-link:hover { background: rgba(255,255,255,0.06); }
         .admin-link.active { background: var(--maroon-800); color: var(--ivory); }
+        .admin-link { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .nav-badge { min-width: 20px; padding: 1px 6px; border-radius: 999px; background: var(--gold-500); color: var(--maroon-950); font-size: 11px; font-weight: 700; text-align: center; }
         .back-to-site {
           margin-top: auto;
           font-size: 12.5px;

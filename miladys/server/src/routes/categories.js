@@ -31,6 +31,21 @@ router.post('/', requireAdmin, async (req, res) => {
   res.status(201).json({ category: rows[0] });
 });
 
+// PUT /api/categories/admin/order — { ids: [...] } in the order they should
+// appear on the website. One statement, so the order changes all at once.
+router.put('/admin/order', requireAdmin, async (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String) : [];
+  if (ids.length === 0) return res.status(400).json({ error: 'ids is required.' });
+  await query(
+    `UPDATE categories c SET sort_order = o.pos
+       FROM unnest($1::text[]) WITH ORDINALITY AS o(id, pos)
+      WHERE c.id = o.id`,
+    [ids]
+  );
+  const { rows } = await query('SELECT * FROM categories ORDER BY sort_order ASC, created_at ASC');
+  res.json({ categories: rows });
+});
+
 router.put('/:id', requireAdmin, async (req, res) => {
   const { name, image, tagline, sortOrder, active } = await ingestFromRequest(req, req.body || {}, { maxDimension: 1600 });
   const { rows } = await query(

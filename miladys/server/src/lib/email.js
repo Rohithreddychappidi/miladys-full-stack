@@ -20,13 +20,13 @@ if (!emailEnabled) {
   );
 }
 
-async function send({ to, subject, html }) {
+async function send({ to, subject, html, replyTo }) {
   if (!emailEnabled) {
     console.log(`[email:skipped] To: ${to} | Subject: ${subject}`);
     return { skipped: true };
   }
   try {
-    return await resend.emails.send({ from: fromEmail, to, subject, html });
+    return await resend.emails.send({ from: fromEmail, to, subject, html, ...(replyTo ? { replyTo } : {}) });
   } catch (err) {
     // Email failures should never break the order/login flow — log and move on.
     console.error('[email:error]', err.message);
@@ -213,9 +213,11 @@ export function sendOrderConfirmationEmail(user, order, items) {
     </table>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:22px;">
+      ${order.discount ? `<tr><td align="right" style="font-size:13px;color:${COLORS.ink600};">Discount${order.coupon_code ? ` (${escapeHtml(order.coupon_code)})` : ''} &nbsp;−₹${order.discount.toLocaleString('en-IN')}</td></tr>` : ''}
+      <tr><td align="right" style="font-size:13px;color:${COLORS.ink600};">Shipping &nbsp;${order.shipping_fee ? `₹${order.shipping_fee.toLocaleString('en-IN')}` : 'Free'}</td></tr>
       <tr>
         <td align="right" style="font-size:16px;font-weight:700;color:${COLORS.maroon900};padding-top:4px;">
-          Grand total &nbsp;₹${order.subtotal.toLocaleString('en-IN')}
+          Grand total &nbsp;₹${orderTotal(order).toLocaleString('en-IN')}
         </td>
       </tr>
     </table>
@@ -241,7 +243,7 @@ export function sendOrderConfirmationEmail(user, order, items) {
     to: user.email,
     subject: `Order confirmed — #MLD${order.id} · Milady's`,
     html: layout({
-      preheader: `Your order #MLD${order.id} is confirmed — total ₹${order.subtotal.toLocaleString('en-IN')}`,
+      preheader: `Your order #MLD${order.id} is confirmed — total ₹${orderTotal(order).toLocaleString('en-IN')}`,
       content,
       ctaLabel: 'View your order',
       ctaUrl: `${siteUrl}/orders`,
@@ -289,4 +291,79 @@ export function sendCancellationEmail(user, order, { refundPercent, refundAmount
 
 function escapeHtml(str = '') {
   return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// What the customer actually paid: items − discount + shipping.
+function orderTotal(order) {
+  return (order.subtotal || 0) - (order.discount || 0) + (order.shipping_fee || 0);
+}
+
+function itemList(items) {
+  return items
+    .map((i) => `<li style="margin:0 0 4px;">${escapeHtml(i.product_name)}${i.color ? ` (${escapeHtml(i.color)})` : ''} × ${i.qty}</li>`)
+    .join('');
+}
+
+export function sendShippedEmail(user, order, items) {
+  const tracking = order.tracking_number
+    ? `<p style="margin:0 0 4px;font-size:13px;color:${COLORS.ink900};"><strong>Tracking number:</strong> ${escapeHtml(order.tracking_number)}</p>`
+    : '';
+  const courier = order.courier
+    ? `<p style="margin:0 0 4px;font-size:13px;color:${COLORS.ink900};"><strong>Courier:</strong> ${escapeHtml(order.courier)}</p>`
+    : '';
+  const content = `
+    <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:400;color:${COLORS.maroon900};margin:0 0 6px;">
+      Your order is on its way
+    </h1>
+    <p style="font-size:14px;line-height:1.7;color:${COLORS.ink600};margin:0 0 18px;">
+      Hi ${escapeHtml(user.name)}, order <strong style="color:${COLORS.ink900};">#MLD${order.id}</strong> has been shipped.
+    </p>
+    ${courier || tracking ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${COLORS.stone100};border-radius:10px;margin-bottom:18px;"><tr><td style="padding:16px 18px;">${courier}${tracking}</td></tr></table>` : ''}
+    <ul style="padding-left:18px;margin:0 0 6px;font-size:13px;color:${COLORS.ink600};">${itemList(items)}</ul>
+  `;
+  return send({
+    to: user.email,
+    subject: `Shipped — #MLD${order.id} · Milady's`,
+    html: layout({
+      preheader: `Order #MLD${order.id} has shipped${order.courier ? ` with ${order.courier}` : ''}`,
+      content,
+      ctaLabel: order.tracking_url ? 'Track your parcel' : 'View your order',
+      ctaUrl: order.tracking_url || `${siteUrl}/orders`,
+    }),
+  });
+}
+
+export function sendDeliveredEmail(user, order) {
+  const content = `
+    <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:400;color:${COLORS.maroon900};margin:0 0 6px;">
+      Delivered
+    </h1>
+    <p style="font-size:14px;line-height:1.7;color:${COLORS.ink600};margin:0 0 18px;">
+      Hi ${escapeHtml(user.name)}, order <strong style="color:${COLORS.ink900};">#MLD${order.id}</strong> has been delivered. We hope you love your saree!
+      If anything isn't right, reply to this email or reach us on WhatsApp within 48 hours.
+    </p>
+  `;
+  return send({
+    to: user.email,
+    subject: `Delivered — #MLD${order.id} · Milady's`,
+    html: layout({ preheader: `Order #MLD${order.id} has been delivered`, content, ctaLabel: 'Leave a review', ctaUrl: `${siteUrl}/orders` }),
+  });
+}
+
+// A customer used the Contact page form — notify the store.
+export function sendContactNotification(storeEmail, msg) {
+  const row = (label, value) => (value ? `<p style="margin:0 0 6px;font-size:13px;color:${COLORS.ink900};"><strong>${label}:</strong> ${escapeHtml(value)}</p>` : '');
+  const content = `
+    <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:400;color:${COLORS.maroon900};margin:0 0 14px;">
+      New message from the website
+    </h1>
+    ${row('Name', msg.name)}${row('Email', msg.email)}${row('Phone', msg.phone)}
+    <p style="margin:12px 0 0;font-size:14px;line-height:1.7;color:${COLORS.ink900};white-space:pre-wrap;">${escapeHtml(msg.message)}</p>
+  `;
+  return send({
+    to: storeEmail,
+    subject: `New website message from ${msg.name}`,
+    replyTo: msg.email || undefined,
+    html: layout({ preheader: msg.message.slice(0, 90), content, ctaLabel: 'Open messages', ctaUrl: `${siteUrl}/admin/messages` }),
+  });
 }

@@ -2,8 +2,9 @@ import { Router } from 'express';
 import { query, pool } from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { razorpay, razorpayEnabled, verifyPaymentSignature } from '../lib/razorpay.js';
-import { sendOrderConfirmationEmail, sendCancellationEmail } from '../lib/email.js';
-import { renderInvoice } from '../lib/invoice.js';
+import { sendOrderConfirmationEmail, sendCancellationEmail, sendShippedEmail, sendDeliveredEmail } from '../lib/email.js';
+import { renderInvoice, renderInvoices } from '../lib/invoice.js';
+import { getStoreInfo } from '../lib/storeInfo.js';
 import { ingestFromRequest, thumbPath } from '../lib/images.js';
 import { findUsableCoupon, computeDiscount } from './coupons.js';
 import { findApplicableTier } from './cancellationPolicy.js';
@@ -263,6 +264,9 @@ router.post('/:id/cancel', requireAuth, async (req, res) => {
   if (order.status !== 'paid' && order.status !== 'paid_oversold') {
     return res.status(400).json({ error: 'Only paid orders can be cancelled.' });
   }
+  if (order.shipping_status === 'shipped' || order.shipping_status === 'delivered') {
+    return res.status(400).json({ error: 'This order has already been shipped, so it can no longer be cancelled here — please contact us for a return.' });
+  }
 
   const daysSincePaid = order.paid_at ? Math.floor((Date.now() - new Date(order.paid_at).getTime()) / 86400000) : 0;
   const tier = await findApplicableTier(daysSincePaid);
@@ -286,12 +290,12 @@ router.post('/:id/cancel', requireAuth, async (req, res) => {
     // would put the stock back twice and send two refunds).
     const { rows: flipped } = await client.query(
       `UPDATE orders SET status = 'cancelled', cancelled_at = now(), refund_percent = $1, refund_amount = $2
-       WHERE id = $3 AND status IN ('paid', 'paid_oversold') RETURNING id`,
+       WHERE id = $3 AND status IN ('paid', 'paid_oversold') AND shipping_status = 'pending' RETURNING id`,
       [tier.refund_percent, refundAmount, order.id]
     );
     if (!flipped.length) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'This order has already been cancelled.' });
+      return res.status(409).json({ error: 'This order has already been cancelled or shipped.' });
     }
     // Put the stock back — exactly the units this order took. An oversold
     // line took fewer than it ordered (see /verify); orders paid before
@@ -336,7 +340,7 @@ router.post('/:id/cancel', requireAuth, async (req, res) => {
 
 // GET /api/orders — the logged-in user's own orders, with items + payment status.
 router.get('/', requireAuth, async (req, res) => {
-  const { rows: orders } = await query('SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC', [req.user.id]);
+  const { rows: orders } = await query('SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC, id DESC', [req.user.id]);
   const { rows: items } = orders.length
     ? await query('SELECT * FROM order_items WHERE order_id = ANY($1)', [orders.map((o) => o.id)])
     : { rows: [] };
@@ -346,14 +350,83 @@ router.get('/', requireAuth, async (req, res) => {
 // GET /api/orders/admin — every order + payment details, for the admin panel.
 router.get('/admin/all', requireAdmin, async (_req, res) => {
   const { rows: orders } = await query(
-    `SELECT o.*, u.name AS customer_name, u.email AS customer_email
+    `SELECT o.*, u.name AS customer_name, u.email AS customer_email, u.mobile AS customer_mobile
      FROM orders o JOIN users u ON u.id = o.user_id
-     ORDER BY o.created_at DESC`
+     ORDER BY o.created_at DESC, o.id DESC`
   );
   const { rows: items } = orders.length
     ? await query('SELECT * FROM order_items WHERE order_id = ANY($1)', [orders.map((o) => o.id)])
     : { rows: [] };
   res.json({ orders: orders.map((o) => ({ ...o, items: items.filter((i) => i.order_id === o.id) })) });
+});
+
+// PUT /api/orders/admin/shipping — update fulfilment for one or many paid
+// orders. Body: { ids: [..], status: 'pending'|'shipped'|'delivered',
+// courier?, trackingNumber?, trackingUrl? }. Courier/tracking are only
+// written when given (so a bulk "mark delivered" keeps each order's own
+// tracking). Customers are emailed when an order becomes shipped or
+// delivered. Unpaid or cancelled orders are skipped and reported back.
+router.put('/admin/shipping', requireAdmin, async (req, res) => {
+  const { ids, status, courier, trackingNumber, trackingUrl } = req.body || {};
+  if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'Select at least one order.' });
+  if (!['pending', 'shipped', 'delivered'].includes(status)) return res.status(400).json({ error: 'Unknown shipping status.' });
+  const cleanIds = ids.map(Number).filter(Number.isInteger);
+  const url = typeof trackingUrl === 'string' && trackingUrl.trim() ? trackingUrl.trim() : null;
+  if (url && !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'The tracking link must start with http:// or https://' });
+
+  const { rows: before } = await query('SELECT id, shipping_status FROM orders WHERE id = ANY($1)', [cleanIds]);
+  const prev = Object.fromEntries(before.map((o) => [o.id, o.shipping_status]));
+  const { rows: updated } = await query(
+    `UPDATE orders SET
+       shipping_status = $2,
+       courier = COALESCE($3, courier),
+       tracking_number = COALESCE($4, tracking_number),
+       tracking_url = COALESCE($5, tracking_url),
+       shipped_at = CASE WHEN $2 = 'pending' THEN NULL WHEN shipped_at IS NULL THEN now() ELSE shipped_at END,
+       delivered_at = CASE WHEN $2 = 'delivered' THEN COALESCE(delivered_at, now()) ELSE NULL END
+     WHERE id = ANY($1) AND status IN ('paid', 'paid_oversold')
+     RETURNING *`,
+    [cleanIds, status, courier?.trim() || null, trackingNumber?.trim() || null, url]
+  );
+  const skipped = cleanIds.filter((id) => !updated.some((o) => o.id === id));
+
+  // Email customers whose order just moved forward to shipped / delivered
+  // (not when the admin undoes a step, e.g. delivered → shipped).
+  const rank = { pending: 0, shipped: 1, delivered: 2 };
+  const changed = updated.filter((o) => rank[o.shipping_status] > rank[prev[o.id] || 'pending']);
+  if (changed.length) {
+    (async () => {
+      for (const o of changed) {
+        const { rows: u } = await query('SELECT name, email FROM users WHERE id = $1', [o.user_id]);
+        if (!u[0]) continue;
+        if (o.shipping_status === 'shipped') {
+          const { rows: items } = await query('SELECT * FROM order_items WHERE order_id = $1', [o.id]);
+          await sendShippedEmail(u[0], o, items);
+        } else {
+          await sendDeliveredEmail(u[0], o);
+        }
+      }
+    })().catch((err) => console.error('[orders/shipping] email failed', err.message));
+  }
+  res.json({ ok: true, updated: updated.map((o) => o.id), skipped, emailed: changed.length });
+});
+
+// GET /api/orders/admin/invoices?ids=1,2,3 — one PDF with an invoice per
+// page, for every PAID order among the ids (unpaid ones are left out).
+router.get('/admin/invoices', requireAdmin, async (req, res) => {
+  const ids = String(req.query.ids || '').split(',').map(Number).filter(Number.isInteger);
+  if (!ids.length) return res.status(400).json({ error: 'Select at least one order.' });
+  const { rows: orders } = await query(
+    'SELECT * FROM orders WHERE id = ANY($1) AND paid_at IS NOT NULL ORDER BY created_at DESC, id DESC',
+    [ids]
+  );
+  if (!orders.length) return res.status(400).json({ error: 'None of the selected orders has been paid, so there are no invoices to download.' });
+  const { rows: items } = await query('SELECT * FROM order_items WHERE order_id = ANY($1) ORDER BY id', [orders.map((o) => o.id)]);
+  const { rows: users } = await query('SELECT id, name, email FROM users WHERE id = ANY($1)', [orders.map((o) => o.user_id)]);
+  const store = await getStoreInfo();
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="Miladys-Invoices-${orders.length}.pdf"`);
+  renderInvoices(res, orders.map((o) => ({ order: o, items: items.filter((i) => i.order_id === o.id), customer: users.find((u) => u.id === o.user_id) })), store);
 });
 
 // GET /api/orders/:id/invoice — PDF invoice/receipt for one order.
@@ -375,9 +448,10 @@ router.get('/:id/invoice', requireAuth, async (req, res) => {
   const { rows: items } = await query('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [order.id]);
   const { rows: userRows } = await query('SELECT name, email FROM users WHERE id = $1', [order.user_id]);
 
+  const store = await getStoreInfo();
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="Miladys-Invoice-${order.id}.pdf"`);
-  renderInvoice(res, { order, items, customer: userRows[0] });
+  renderInvoice(res, { order, items, customer: userRows[0] }, store);
 });
 
 export default router;

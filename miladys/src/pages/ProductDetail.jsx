@@ -10,6 +10,7 @@ import { api } from '../data/api';
 import { formatINR, getProducts } from '../data/store';
 import { loadProductPool } from '../data/catalog';
 import { thumbUrl } from '../utils/images';
+import { useStoreInfo, waHref } from '../data/storeInfo';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -119,15 +120,8 @@ export default function ProductDetail() {
   }, [mainImage]);
   const displayImage = loadedFull === mainImage ? mainImage : thumbUrl(mainImage);
 
-  // Store WhatsApp number (Admin → Home Page → Footer links), for "Ask on WhatsApp".
-  const [whatsapp, setWhatsapp] = useState('');
-  useEffect(() => {
-    let active = true;
-    api.getHomeSection('social_links')
-      .then(({ section }) => active && setWhatsapp(String(section?.content?.whatsapp || '').replace(/\D/g, '')))
-      .catch(() => {});
-    return () => { active = false; };
-  }, []);
+  // Store WhatsApp number (Admin → Footer & Contact), for "Ask on WhatsApp".
+  const { whatsapp } = useStoreInfo();
 
   const [shareNote, setShareNote] = useState('');
 
@@ -422,9 +416,10 @@ export default function ProductDetail() {
 
   const productUrl = `${SITE_URL}/products/${product.id}`;
   const productLabel = selectedColor?.name ? `${product.name} (${selectedColor.name})` : product.name;
-  const whatsappHref = whatsapp
-    ? `https://wa.me/${whatsapp}?text=${encodeURIComponent(`Hi Milady's, I'd like to know more about ${productLabel} — ${productUrl}`)}`
-    : '';
+  const whatsappHref = waHref(whatsapp, `Hi Milady's, I'd like to know more about ${productLabel} — ${productUrl}`);
+  // Out of stock: instead of a dead button, ask the store to message back
+  // when it's in stock again.
+  const restockHref = waHref(whatsapp, `Hi Milady's, please let me know when ${productLabel} is back in stock — ${productUrl}`);
 
   // Phone share sheet where available; otherwise copy the link.
   async function handleShare() {
@@ -592,9 +587,19 @@ export default function ProductDetail() {
           )}
 
           <div className="detail-actions" ref={actionsRef}>
-            <button className="btn btn-primary" disabled={outOfStock} onClick={handleAdd}>
-              {outOfStock ? 'Notify Me' : added ? 'Added ✓' : 'Add to Cart'}
-            </button>
+            {outOfStock ? (
+              restockHref ? (
+                <a className="btn btn-primary restock-btn" href={restockHref} target="_blank" rel="noreferrer">
+                  Tell me when it&apos;s back (WhatsApp)
+                </a>
+              ) : (
+                <button className="btn btn-primary" disabled>Sold out</button>
+              )
+            ) : (
+              <button className="btn btn-primary" onClick={handleAdd}>
+                {added ? 'Added ✓' : 'Add to Cart'}
+              </button>
+            )}
             {!outOfStock && (
               <button
                 className="btn btn-outline"
@@ -610,7 +615,7 @@ export default function ProductDetail() {
           {added && <Link to="/cart" className="view-cart-link">View cart →</Link>}
 
           <div className="detail-secondary-actions">
-            {whatsappHref && (
+            {whatsappHref && !outOfStock && (
               <a className="ask-whatsapp" href={whatsappHref} target="_blank" rel="noreferrer">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path fill="currentColor" d="M12.04 2a9.9 9.9 0 0 0-8.5 15l-1.4 5 5.2-1.4A9.9 9.9 0 1 0 12.04 2Zm0 18.1a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3.1.8.8-3-.2-.3a8.2 8.2 0 1 1 7 3.9Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.5l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3Z" />
@@ -650,9 +655,13 @@ export default function ProductDetail() {
           <span className="sticky-buy-name">{productLabel}</span>
           <span className="sticky-buy-price">{formatINR(product.price)}</span>
         </div>
-        <button className="btn btn-primary" disabled={outOfStock} onClick={handleAdd} tabIndex={showStickyBar ? 0 : -1}>
-          {outOfStock ? 'Sold out' : added ? 'Added ✓' : 'Add to Cart'}
-        </button>
+        {outOfStock && restockHref ? (
+          <a className="btn btn-primary" href={restockHref} target="_blank" rel="noreferrer" tabIndex={showStickyBar ? 0 : -1}>Notify me</a>
+        ) : (
+          <button className="btn btn-primary" disabled={outOfStock} onClick={handleAdd} tabIndex={showStickyBar ? 0 : -1}>
+            {outOfStock ? 'Sold out' : added ? 'Added ✓' : 'Add to Cart'}
+          </button>
+        )}
       </div>
 
       {/* Fullscreen Fabric & Weave Lightbox Modal */}
@@ -955,6 +964,7 @@ export default function ProductDetail() {
           cursor: pointer;
         }
         .detail-actions { display: flex; gap: 12px; }
+        .restock-btn { text-align: center; text-decoration: none; }
         .detail-secondary-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 18px; }
         .ask-whatsapp {
           display: inline-flex; align-items: center; gap: 8px;

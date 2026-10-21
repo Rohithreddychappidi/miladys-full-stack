@@ -1,44 +1,18 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../data/api';
-
-const defaultSocial = {
-  whatsapp: '',
-  facebook: '',
-  twitter: '',
-  instagram: 'https://www.instagram.com/themiladys_',
-};
-
-function whatsappUrl(number) {
-  const digits = (number || '').replace(/[^\d]/g, '');
-  return digits ? `https://wa.me/${digits}` : '';
-}
+import { lines, telHref, useStoreInfo, waHref } from '../data/storeInfo';
 
 export default function Footer() {
-  const [social, setSocial] = useState(defaultSocial);
-
-  useEffect(() => {
-    // Fetches only the social_links section instead of every enabled home
-    // section (which includes things like hero video, stored raw and
-    // potentially several MB) — this component renders on every page
-    // site-wide, so pulling the full payload here meant every page view,
-    // not just Home, was downloading the hero video.
-    api
-      .getHomeSection('social_links')
-      .then(({ section }) => {
-        if (section?.content) setSocial({ ...defaultSocial, ...section.content });
-      })
-      .catch(() => {});
-  }, []);
-
-  const wa = whatsappUrl(social.whatsapp);
+  // Description, contact details, hours and social links are edited in
+  // Admin → Footer & Contact.
+  const social = useStoreInfo();
+  const wa = waHref(social.whatsapp);
 
   return (
     <footer className="site-footer">
       <div className="container footer-grid">
         <div className="footer-brand">
           <img src="/images/logo-white.png" alt="Milady's" className="footer-logo" width="98" height="34" loading="lazy" />
-          <p>Premium sarees, handpicked for the woman who wears tradition her own way.</p>
+          <p>{social.description}</p>
 
           <div className="social-links">
             {social.instagram && (
@@ -92,16 +66,15 @@ export default function Footer() {
 
         <div className="footer-col">
           <h2>Reach Us</h2>
-          <a href="tel:+917842225444">+91 78422 25444</a>
-          <a href="mailto:themiladysofficial@gmail.com">themiladysofficial@gmail.com</a>
-          <p className="addr">Flat No. 402, JM&apos;s CNR Tower,<br />Srinagar, Kakinada, A.P. 533003</p>
-          <a href="https://maps.app.goo.gl/5VFnXKQRaPAT8UxC7" target="_blank" rel="noreferrer">Get Directions →</a>
+          {social.phone && <a href={telHref(social.phone)}>{social.phone}</a>}
+          {social.email && <a href={`mailto:${social.email}`}>{social.email}</a>}
+          {social.address && <p className="addr">{lines(social.address).map((l, i) => <span key={i}>{l}{i < lines(social.address).length - 1 && <br />}</span>)}</p>}
+          {social.mapsLink && <a href={social.mapsLink} target="_blank" rel="noreferrer">Get Directions →</a>}
         </div>
 
         <div className="footer-col">
           <h2>Store Hours</h2>
-          <p>Mon – Sat: 10am – 9pm</p>
-          <p>Sunday: 10am – 7pm</p>
+          {lines(social.hours).map((l, i) => <p key={i}>{l}</p>)}
         </div>
       </div>
 

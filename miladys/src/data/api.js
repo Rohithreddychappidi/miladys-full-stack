@@ -117,6 +117,7 @@ export const api = {
   createCategory: (payload) => request('/api/categories', { method: 'POST', body: payload }),
   updateCategory: (id, payload) => request(`/api/categories/${id}`, { method: 'PUT', body: payload }),
   deleteCategory: (id) => request(`/api/categories/${id}`, { method: 'DELETE' }),
+  reorderCategories: (ids) => request('/api/categories/admin/order', { method: 'PUT', body: { ids } }),
 
   // products
   // params: { category, q, sort: newest|price_asc|price_desc, page, limit, exclude, ids }
@@ -135,6 +136,13 @@ export const api = {
 
   // Stores one photo (data URL) as an image file; returns { url, thumb }.
   uploadImage: (dataUrl) => request('/api/uploads/image', { method: 'POST', body: { image: dataUrl } }),
+
+  // contact form + admin inbox
+  submitContact: (payload) => request('/api/contact', { method: 'POST', body: payload, auth: false }),
+  getMessages: () => request('/api/contact/admin'),
+  getUnreadMessages: () => request('/api/contact/admin/unread'),
+  updateMessage: (id, status) => request(`/api/contact/admin/${id}`, { method: 'PUT', body: { status } }),
+  deleteMessage: (id) => request(`/api/contact/admin/${id}`, { method: 'DELETE' }),
 
   // home sections (CMS)
   getHomeSections: () => request('/api/home-sections', { auth: false }),
@@ -155,6 +163,9 @@ export const api = {
   getMyOrders: () => request('/api/orders'),
   getAllOrders: () => request('/api/orders/admin/all'),
   downloadInvoice: (id) => downloadFile(`/api/orders/${id}/invoice`, `Miladys-Invoice-${id}.pdf`),
+  // Admin: bulk shipping status { ids, status: pending|shipped|delivered, courier, trackingNumber, trackingUrl }
+  updateShipping: (payload) => request('/api/orders/admin/shipping', { method: 'PUT', body: payload }),
+  downloadInvoices: (ids) => downloadFile(`/api/orders/admin/invoices?ids=${ids.join(',')}`, `Miladys-Invoices-${ids.length}.pdf`),
 
   // coupons
   validateCoupon: (payload) => request('/api/coupons/validate', { method: 'POST', body: payload }),

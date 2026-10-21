@@ -3,6 +3,7 @@ import RecommendedProducts from '../components/RecommendedProducts';
 import ScrollReveal from '../components/ScrollReveal';
 import Seo from '../components/Seo';
 import { api } from '../data/api';
+import { ABOUT_VALUES_DEFAULT } from '../data/aboutDefaults';
 
 const defaults = {
   hero: {
@@ -20,9 +21,11 @@ const defaults = {
   },
 };
 
+
 export default function About() {
   const [hero, setHero] = useState(defaults.hero);
   const [story, setStory] = useState(defaults.story);
+  const [values, setValues] = useState(ABOUT_VALUES_DEFAULT);
 
   useEffect(() => {
     // Fetches only the two sections this page actually needs, in
@@ -32,9 +35,12 @@ export default function About() {
     Promise.all([
       api.getHomeSection('about_hero').catch(() => null),
       api.getHomeSection('about_story').catch(() => null),
-    ]).then(([heroRes, storyRes]) => {
+      api.getHomeSection('about_values').catch(() => null),
+    ]).then(([heroRes, storyRes, valuesRes]) => {
       if (heroRes?.section?.content) setHero({ ...defaults.hero, ...heroRes.section.content });
       if (storyRes?.section?.content) setStory({ ...defaults.story, ...storyRes.section.content });
+      const items = valuesRes?.section?.content?.items;
+      if (Array.isArray(items)) setValues(items.filter((v) => v && (v.title || v.text)));
     });
   }, []);
 
@@ -80,22 +86,18 @@ export default function About() {
         )}
       </section>
 
+      {values.length > 0 && (
       <section className="about-values">
         <div className="container values-grid">
-          <ScrollReveal as="div" className="value-card">
-            <h3>Sourced Direct</h3>
-            <p>We buy straight from weaving clusters, cutting out layers of middlemen.</p>
-          </ScrollReveal>
-          <ScrollReveal as="div" className="value-card" delay={0.1}>
-            <h3>Hand-Checked</h3>
-            <p>Every saree is inspected for weave, zari and finish before dispatch.</p>
-          </ScrollReveal>
-          <ScrollReveal as="div" className="value-card" delay={0.2}>
-            <h3>Kakinada Rooted</h3>
-            <p>A local store with a growing catalogue, built one weave at a time.</p>
-          </ScrollReveal>
+          {values.map((v, i) => (
+            <ScrollReveal as="div" className="value-card" delay={i * 0.1} key={i}>
+              {v.title && <h3>{v.title}</h3>}
+              {v.text && <p>{v.text}</p>}
+            </ScrollReveal>
+          ))}
         </div>
       </section>
+      )}
 
       <RecommendedProducts />
 

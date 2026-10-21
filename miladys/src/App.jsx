@@ -59,6 +59,9 @@ const AdminProducts = lazyPage(() => import('./pages/admin/AdminProducts'));
 const AdminOrders = lazyPage(() => import('./pages/admin/AdminOrders'));
 const AdminReviews = lazyPage(() => import('./pages/admin/AdminReviews'));
 const AdminTestimonials = lazyPage(() => import('./pages/admin/AdminTestimonials'));
+const AdminMessages = lazyPage(() => import('./pages/admin/AdminMessages'));
+const AdminStore = lazyPage(() => import('./pages/admin/AdminStore'));
+const AdminPolicies = lazyPage(() => import('./pages/admin/AdminPolicies'));
 
 const pageFallback = <div className="page-loading" style={{ minHeight: '70vh' }} aria-busy="true" />;
 
@@ -120,6 +123,9 @@ export default function App() {
             <Route path="cancellation-policy" element={<AdminCancellationPolicy />} />
             <Route path="reviews" element={<AdminReviews />} />
             <Route path="testimonials" element={<AdminTestimonials />} />
+            <Route path="messages" element={<AdminMessages />} />
+            <Route path="store" element={<AdminStore />} />
+            <Route path="policies" element={<AdminPolicies />} />
             <Route path="*" element={<AdminDashboard />} />
           </Route>
         </Routes>

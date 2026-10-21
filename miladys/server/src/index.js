@@ -25,6 +25,7 @@ import testimonialRoutes from './routes/testimonials.js';
 import cancellationPolicyRoutes from './routes/cancellationPolicy.js';
 import sitemapRoutes from './routes/sitemap.js';
 import uploadRoutes from './routes/uploads.js';
+import contactRoutes from './routes/contact.js';
 
 const app = express();
 // Behind Nginx — lets req.protocol report https (used to build absolute
@@ -81,6 +82,7 @@ app.use('/uploads', express.static(uploadsDir, {
 }));
 
 app.use('/api/uploads', uploadRoutes);
+app.use('/api/contact', contactRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/products', productRoutes);

@@ -174,6 +174,14 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS refund_percent INTEGER;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS refund_amount INTEGER;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_fee INTEGER NOT NULL DEFAULT 0;
+-- Fulfilment, separate from payment status: pending (not yet sent) →
+-- shipped (courier + tracking) → delivered. Set from Admin → Orders.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_status TEXT NOT NULL DEFAULT 'pending';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS courier TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_number TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_url TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipped_at TIMESTAMPTZ;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ;
 
 -- Cancellation policy — fully admin-editable tiers, e.g. "within 1 day,
 -- 100% refund" / "within 3 days, 50% refund". max_days is the cutoff (in
@@ -218,6 +226,17 @@ ALTER TABLE order_items ADD COLUMN IF NOT EXISTS color TEXT;
 -- was oversold. Cancelling puts back exactly this many. NULL on orders
 -- paid before this column existed (treated as qty, the old behaviour).
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS stock_reserved INTEGER;
+
+-- Messages sent from the Contact page form (Admin → Messages).
+CREATE TABLE IF NOT EXISTS contact_messages (
+  id         SERIAL PRIMARY KEY,
+  name       TEXT NOT NULL,
+  email      TEXT,
+  phone      TEXT,
+  message    TEXT NOT NULL,
+  status     TEXT NOT NULL DEFAULT 'new', -- new | read | replied | archived
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);

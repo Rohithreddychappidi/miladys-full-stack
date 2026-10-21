@@ -10,12 +10,7 @@ const INK = '#2B2320';
 const INK_LIGHT = '#7A6E67';
 const RULE = '#E4DDD4';
 
-const STORE = {
-  name: "Milady's",
-  addressLines: ["Flat No. 402, JM's CNR Tower, Srinagar, Kakinada, A.P. 533003"],
-  phone: '+91 78422 25444',
-  email: 'themiladysofficial@gmail.com',
-};
+import { STORE_DEFAULTS } from './storeInfo.js';
 
 function formatINR(amount) {
   return '\u20B9' + Number(amount || 0).toLocaleString('en-IN');
@@ -37,10 +32,24 @@ const STATUS_LABEL = {
 // Renders a full invoice PDF for one order directly onto the given
 // writable stream (the Express response) and ends it — the caller just
 // pipes/awaits this, no buffer juggling needed for a document this size.
-export function renderInvoice(res, { order, items, customer }) {
+// `store` is the editable store details (lib/storeInfo.js).
+export function renderInvoice(res, { order, items, customer }, store = STORE_DEFAULTS) {
+  renderInvoices(res, [{ order, items, customer }], store);
+}
+
+// Several orders → one PDF, one invoice per page (Admin → Orders bulk download).
+export function renderInvoices(res, invoices, store = STORE_DEFAULTS) {
   const doc = new PDFDocument({ size: 'A4', margin: 50 });
   doc.pipe(res);
+  invoices.forEach((inv, i) => {
+    if (i > 0) doc.addPage();
+    drawInvoice(doc, inv, store);
+  });
+  doc.end();
+}
 
+function drawInvoice(doc, { order, items, customer }, store) {
+  const STORE = { ...STORE_DEFAULTS, ...store };
   // ---------- Header: logo + store details, invoice number + dates ----------
   try {
     doc.image(LOGO_PATH, 50, 45, { width: 34 });
@@ -49,9 +58,9 @@ export function renderInvoice(res, { order, items, customer }) {
   }
   doc.fillColor(MAROON).font('Helvetica-Bold').fontSize(16).text(STORE.name, 92, 50);
   doc.fillColor(INK_LIGHT).font('Helvetica').fontSize(8.5);
-  let y = 70;
-  for (const line of STORE.addressLines) { doc.text(line, 92, y, { width: 260 }); y += 11; }
-  doc.text(`${STORE.phone}  \u00B7  ${STORE.email}`, 92, y);
+  const addressLine = STORE.address.split('\n').map((l) => l.trim().replace(/,\s*$/, '')).filter(Boolean).join(', ');
+  doc.text(addressLine, 92, 70, { width: 200 });
+  doc.text(`${STORE.phone}  \u00B7  ${STORE.email}`, 92, doc.y + 1, { width: 200 });
 
   doc.fillColor(INK).font('Helvetica-Bold').fontSize(20).text('INVOICE', 0, 48, { align: 'right' });
   doc.font('Helvetica').fontSize(9);
@@ -140,6 +149,4 @@ export function renderInvoice(res, { order, items, customer }) {
       `Thank you for shopping with ${STORE.name}. For any questions about this order, reach us at ${STORE.email} or ${STORE.phone}.`,
       50, 760, { width: 495, align: 'center' }
     );
-
-  doc.end();
 }
