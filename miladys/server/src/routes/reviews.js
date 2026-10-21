@@ -109,6 +109,25 @@ router.put('/admin/reviews/:id/approve', requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
+// PUT /api/admin/reviews/bulk — { action: 'publish'|'hide'|'delete', ids: [..] }
+// or { action: 'publish', allPending: true } for "Approve all".
+router.put('/admin/reviews/bulk', requireAdmin, async (req, res) => {
+  const { action, ids, allPending } = req.body || {};
+  if (!['publish', 'hide', 'delete'].includes(action)) return res.status(400).json({ error: 'Unknown action.' });
+  let target;
+  if (allPending && action === 'publish') {
+    target = "status = 'pending'";
+  } else {
+    const clean = (Array.isArray(ids) ? ids : []).map(Number).filter(Number.isInteger);
+    if (!clean.length) return res.status(400).json({ error: 'Select at least one review.' });
+    target = `id = ANY(ARRAY[${clean.join(',')}]::int[])`;
+  }
+  const { rowCount } = action === 'delete'
+    ? await query(`DELETE FROM reviews WHERE ${target}`)
+    : await query(`UPDATE reviews SET status = $1, approved = $2 WHERE ${target}`, [action === 'publish' ? 'published' : 'hidden', action === 'publish']);
+  res.json({ ok: true, count: rowCount });
+});
+
 // PUT /api/admin/reviews/settings — { requireApproval: boolean }
 router.put('/admin/reviews/settings', requireAdmin, async (req, res) => {
   const requireApprovalValue = req.body?.requireApproval !== false;

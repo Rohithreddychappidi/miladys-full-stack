@@ -156,6 +156,7 @@ export const api = {
   getMyReview: (productId) => request(`/api/products/${productId}/reviews/mine`),
   getPendingReviews: () => request('/api/admin/reviews/pending'),
   updateReviewSettings: (payload) => request('/api/admin/reviews/settings', { method: 'PUT', body: payload }),
+  bulkReviews: (payload) => request('/api/admin/reviews/bulk', { method: 'PUT', body: payload }),
   getAdminReviews: () => request('/api/admin/reviews'),
   approveReview: (id, approved) => request(`/api/admin/reviews/${id}/approve`, { method: 'PUT', body: { approved } }),
   deleteReview: (id) => request(`/api/admin/reviews/${id}`, { method: 'DELETE' }),

@@ -21,6 +21,9 @@ export default function AdminReviews() {
   const [error, setError] = useState('');
   const [loaded, setLoaded] = useState(false);
   const [zoomSrc, setZoomSrc] = useState(null);
+  const [selected, setSelected] = useState(() => new Set());
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     refresh(true);
@@ -46,6 +49,45 @@ export default function AdminReviews() {
     all: reviews.length,
   }), [reviews]);
   const visible = tab === 'all' ? reviews : reviews.filter((r) => r.status === tab);
+
+  // Selection is per tab: switching tabs clears it so a hidden selection
+  // can't be acted on by mistake.
+  useEffect(() => { setSelected(new Set()); }, [tab]);
+  const allVisibleSelected = visible.length > 0 && visible.every((r) => selected.has(r.id));
+
+  function toggle(id) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelected(allVisibleSelected ? new Set() : new Set(visible.map((r) => r.id)));
+  }
+
+  async function runBulk(action, { allPending = false } = {}) {
+    const n = allPending ? counts.pending : selected.size;
+    if (!n) return;
+    const verb = { publish: 'Publish', hide: 'Hide', delete: 'Delete' }[action];
+    if (action === 'delete' && !window.confirm(`Delete ${n} review${n === 1 ? '' : 's'}? This can't be undone.`)) return;
+    if (allPending && !window.confirm(`Publish all ${n} review${n === 1 ? '' : 's'} waiting for approval?`)) return;
+    setError('');
+    setBusy(true);
+    try {
+      const { count } = await api.bulkReviews(allPending ? { action, allPending: true } : { action, ids: [...selected] });
+      setSelected(new Set());
+      const done = { publish: 'published', hide: 'hidden', delete: 'deleted' }[action];
+      setNotice(`${count} review${count === 1 ? '' : 's'} ${done}.`);
+      setTimeout(() => setNotice(''), 3500);
+      refresh();
+    } catch (err) {
+      setError(`${verb} failed: ${err.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function setPublished(review, publish) {
     try {
@@ -97,6 +139,8 @@ export default function AdminReviews() {
 
       {error && <p className="admin-error">{error}</p>}
 
+      {notice && <p className="admin-notice" role="status">{notice}</p>}
+
       <div className="review-tabs" role="tablist">
         {TABS.map((t) => (
           <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={'review-tab' + (tab === t.key ? ' active' : '') + (t.key === 'pending' && counts.pending ? ' has-pending' : '')} onClick={() => setTab(t.key)}>
@@ -105,12 +149,34 @@ export default function AdminReviews() {
         ))}
       </div>
 
+      {visible.length > 0 && (
+        <div className="bulk-row">
+          <label className="select-all">
+            <input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} />
+            {selected.size ? `${selected.size} selected` : `Select all ${visible.length}`}
+          </label>
+          {selected.size > 0 && (
+            <>
+              {tab !== 'published' && <button type="button" className="btn btn-primary small" disabled={busy} onClick={() => runBulk('publish')}>Publish selected</button>}
+              {tab !== 'hidden' && <button type="button" className="btn btn-outline small" disabled={busy} onClick={() => runBulk('hide')}>Hide selected</button>}
+              <button type="button" className="btn btn-outline small danger-btn" disabled={busy} onClick={() => runBulk('delete')}>Delete selected</button>
+            </>
+          )}
+          {tab === 'pending' && counts.pending > 0 && (
+            <button type="button" className="btn btn-primary small approve-all" disabled={busy} onClick={() => runBulk('publish', { allPending: true })}>
+              Approve all ({counts.pending})
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="cms-list">
         {loaded && visible.length === 0 && (
           <p className="empty">{tab === 'pending' ? 'Nothing waiting for approval.' : 'No reviews here.'}</p>
         )}
         {visible.map((r) => (
-          <div className={`review-row status-${r.status}`} key={r.id}>
+          <div className={`review-row status-${r.status}${selected.has(r.id) ? ' is-selected' : ''}`} key={r.id}>
+            <input type="checkbox" className="row-check" checked={selected.has(r.id)} onChange={() => toggle(r.id)} aria-label={`Select review of ${r.product_name} by ${r.user_name}`} />
             <div className="review-row-main">
               <div className="review-row-head">
                 <Link to={`/products/${r.product_id}#reviews`} target="_blank" rel="noreferrer" className="review-product">{r.product_name} ↗</Link>
@@ -198,6 +264,15 @@ export default function AdminReviews() {
         .row-actions button { background: none; border: none; font-size: 12.5px; color: var(--maroon-900); cursor: pointer; }
         .row-actions .publish { font-weight: 600; }
         .row-actions .danger { color: #a13a3a; }
+        .admin-notice { font-size: 12.5px; color: #1e7039; background: #e8f2e6; padding: 9px 12px; border-radius: var(--radius-sm); margin-bottom: 12px; max-width: 640px; }
+        .bulk-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; min-height: 36px; }
+        .select-all { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-600); margin-right: 6px; cursor: pointer; }
+        .select-all input, .row-check { width: 16px; height: 16px; flex: none; }
+        .row-check { margin-top: 2px; cursor: pointer; }
+        .btn.small { padding: 8px 14px; font-size: 12px; }
+        .danger-btn { color: #a13a3a; border-color: #e5c4c4; }
+        .approve-all { margin-left: auto; }
+        .review-row.is-selected { outline: 1px solid var(--maroon-800); }
         .photo-zoom { position: fixed; inset: 0; z-index: 100; background: rgba(20,10,10,0.85); display: flex; align-items: center; justify-content: center; cursor: zoom-out; padding: 30px; }
         .photo-zoom img { max-width: min(90vw, 700px); max-height: 85vh; border-radius: var(--radius-md); }
         @media (max-width: 640px) { .review-row { flex-direction: column; } }
