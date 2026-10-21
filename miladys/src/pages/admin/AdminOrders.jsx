@@ -546,6 +546,7 @@ export default function AdminOrders() {
         .order-row-actions:empty { display: none; }
         .wa-btn { margin-left: auto; }
         .show-more { align-self: center; }
+        @media (max-width: 860px) { .bulk-bar { top: 64px; } }
         @media (max-width: 760px) {
           .ship-fields { grid-template-columns: 1fr; }
           .pills { margin-left: 0; }

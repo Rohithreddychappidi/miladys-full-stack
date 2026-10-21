@@ -58,6 +58,15 @@ export function CartProvider({ children }) {
     });
   }
 
+  // Update one line's details (e.g. today's price) without touching qty.
+  function updateItem(keyOrId, patch) {
+    setItems((prev) => {
+      const next = prev.map((i) => (getItemKey(i) === keyOrId || i.id === keyOrId ? { ...i, ...patch } : i));
+      saveCart(next);
+      return next;
+    });
+  }
+
   function clearCart() {
     setItems([]);
     saveCart([]);
@@ -67,7 +76,7 @@ export function CartProvider({ children }) {
   const subtotal = useMemo(() => items.reduce((sum, i) => sum + i.qty * i.price, 0), [items]);
 
   return (
-    <CartContext.Provider value={{ items, addItem, updateQty, removeItem, clearCart, count, subtotal }}>
+    <CartContext.Provider value={{ items, addItem, updateQty, updateItem, removeItem, clearCart, count, subtotal }}>
       {children}
     </CartContext.Provider>
   );

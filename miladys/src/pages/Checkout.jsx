@@ -4,6 +4,7 @@ import RecommendedProducts from '../components/RecommendedProducts';
 import Seo from '../components/Seo';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import { cartKey, useCartAvailability } from '../data/cartAvailability';
 import { api } from '../data/api';
 import { formatINR } from '../data/store';
 import { thumbUrl } from '../utils/images';
@@ -27,7 +28,15 @@ function loadRazorpayScript() {
 }
 
 export default function Checkout() {
-  const { items, subtotal, clearCart } = useCart();
+  const { items, subtotal, clearCart, updateItem } = useCart();
+  // Same bag check as the Cart page: nothing sold out / removed, prices current.
+  const availability = useCartAvailability(items);
+  useEffect(() => {
+    for (const item of items) {
+      const info = availability.byKey[cartKey(item)];
+      if (info?.price && info.price !== item.price) updateItem(cartKey(item), { price: info.price });
+    }
+  }, [availability, items, updateItem]);
   const { user } = useAuth();
   const [addresses, setAddresses] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -335,9 +344,14 @@ export default function Checkout() {
             )}
             <div className="summary-row total"><span>Total</span><span>{formatINR(total)}</span></div>
             {error && <p className="checkout-error">{error}</p>}
+            {availability.blocking && (
+              <p className="checkout-error" role="alert">
+                Some sarees in your bag are sold out or no longer available. <Link to="/cart">Review your bag</Link> to continue.
+              </p>
+            )}
             <button
               className="btn btn-primary place-order-btn"
-              disabled={!selectedId || placing}
+              disabled={!selectedId || placing || availability.blocking}
               onClick={handlePlaceOrder}
             >
               {placing ? 'Processing…' : `Pay ${formatINR(total)} with Razorpay`}

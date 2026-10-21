@@ -59,7 +59,7 @@ router.post('/create', requireAuth, async (req, res) => {
   const lineItems = [];
   for (const { productId, qty, color, image: chosenImage } of items) {
     const p = byId[productId];
-    if (!p) return res.status(400).json({ error: `Product ${productId} not found.` });
+    if (!p) return res.status(400).json({ error: 'One of the sarees in your bag is no longer available — please remove it from your bag and try again.' });
     // Total across every cart line for this saree (e.g. two colours of it).
     if (p.stock < wanted[productId]) return res.status(400).json({ error: `${p.name} is out of stock.` });
     subtotal += p.price * qty;

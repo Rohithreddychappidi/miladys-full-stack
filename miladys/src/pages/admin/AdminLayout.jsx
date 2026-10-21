@@ -95,6 +95,12 @@ function AdminLoginGate() {
 export default function AdminLayout() {
   const { user, loading, isAdmin, logout } = useAuth();
   const unread = useUnreadMessages(Boolean(user && isAdmin));
+  // Phones: the menu folds behind a ☰ button and closes after each choice.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const location = useLocation();
+  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
+  const current = links.find((l) => (l.end ? location.pathname === l.to : location.pathname.startsWith(l.to)));
+  const totalBadges = (unread.messages || 0) + (unread.reviews || 0);
 
   if (loading) return null;
   if (!user || !isAdmin) return <AdminLoginGate />;
@@ -102,11 +108,25 @@ export default function AdminLayout() {
   return (
     <div className="admin-shell">
       <Seo title="Admin" path="/admin" noindex />
-      <aside className="admin-sidebar">
-        <div className="admin-brand">
-          <img src="/images/monogram-white.png" alt="" className="brand-mark" /> Milady&apos;s <span className="cms-tag">CMS</span>
+      <aside className={`admin-sidebar${menuOpen ? ' menu-open' : ''}`}>
+        <div className="admin-topbar">
+          <div className="admin-brand">
+            <img src="/images/monogram-white.png" alt="" className="brand-mark" /> Milady&apos;s <span className="cms-tag">CMS</span>
+          </div>
+          <span className="admin-current">{current?.label}</span>
+          <button
+            type="button"
+            className="admin-menu-btn"
+            aria-expanded={menuOpen}
+            aria-controls="admin-nav"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            onClick={() => setMenuOpen((o) => !o)}
+          >
+            {menuOpen ? '✕' : '☰'}
+            {!menuOpen && totalBadges > 0 && <span className="menu-dot" aria-hidden="true" />}
+          </button>
         </div>
-        <nav>
+        <nav id="admin-nav">
           {links.map((l) => (
             <NavLink
               key={l.to}
@@ -119,8 +139,10 @@ export default function AdminLayout() {
             </NavLink>
           ))}
         </nav>
-        <button type="button" className="back-to-site logout-btn" onClick={logout}>Log out</button>
-        <NavLink to="/" className="back-to-site">← Back to site</NavLink>
+        <div className="admin-sidebar-foot">
+          <button type="button" className="back-to-site logout-btn" onClick={logout}>Log out</button>
+          <NavLink to="/" className="back-to-site">← Back to site</NavLink>
+        </div>
       </aside>
 
       <main className="admin-main">
@@ -188,12 +210,22 @@ export default function AdminLayout() {
         .logout-btn { margin-top: 20px; }
         .back-to-site:hover { opacity: 1; }
         .admin-main { padding: 40px 44px; }
+        .admin-topbar { display: contents; }
+        .admin-current, .admin-menu-btn { display: none; }
+        .admin-sidebar-foot { margin-top: auto; display: flex; flex-direction: column; }
         @media (max-width: 860px) {
           .admin-shell { grid-template-columns: 1fr; }
-          .admin-sidebar { flex-direction: row; align-items: center; padding: 16px 20px; gap: 20px; flex-wrap: wrap; }
-          .admin-sidebar nav { flex-direction: row; flex-wrap: wrap; }
-          .back-to-site { margin-top: 0; margin-left: auto; }
-          .admin-main { padding: 24px 20px; }
+          .admin-sidebar { position: sticky; top: 0; z-index: 50; padding: 0; display: block; }
+          .admin-topbar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+          .admin-topbar .admin-brand { margin: 0; font-size: 16px; }
+          .admin-current { display: block; flex: 1; min-width: 0; text-align: right; font-size: 13px; color: var(--blush-300); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .admin-menu-btn { display: inline-flex; align-items: center; justify-content: center; position: relative; width: 40px; height: 40px; border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,0.18); background: none; color: var(--ivory); font-size: 18px; cursor: pointer; flex: none; }
+          .menu-dot { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%; background: var(--gold-500); }
+          .admin-sidebar nav, .admin-sidebar-foot { display: none; }
+          .admin-sidebar.menu-open nav { display: flex; flex-direction: column; padding: 4px 12px 8px; max-height: calc(100vh - 140px); overflow-y: auto; }
+          .admin-sidebar.menu-open .admin-sidebar-foot { display: flex; flex-direction: row; justify-content: space-between; padding: 10px 20px 16px; border-top: 1px solid rgba(255,255,255,0.08); }
+          .admin-sidebar-foot .logout-btn { margin-top: 0; }
+          .admin-main { padding: 24px 16px; min-width: 0; }
         }
       `}</style>
     </div>
