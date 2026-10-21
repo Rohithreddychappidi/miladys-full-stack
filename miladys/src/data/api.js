@@ -170,6 +170,9 @@ export const api = {
   downloadInvoice: (id) => downloadFile(`/api/orders/${id}/invoice`, `Miladys-Invoice-${id}.pdf`),
   // Admin: bulk shipping status { ids, status: pending|shipped|delivered, courier, trackingNumber, trackingUrl }
   updateShipping: (payload) => request('/api/orders/admin/shipping', { method: 'PUT', body: payload }),
+  adminCancelOrder: (id, payload) => request(`/api/orders/admin/${id}/cancel`, { method: 'POST', body: payload }),
+  adminRefundOrder: (id, payload) => request(`/api/orders/admin/${id}/refund`, { method: 'POST', body: payload }),
+  retryRefund: (refundId) => request(`/api/orders/admin/refunds/${refundId}/retry`, { method: 'POST' }),
   deleteOrders: (ids) => request('/api/orders/admin/delete', { method: 'POST', body: { ids } }),
   downloadInvoices: (ids) => downloadFile(`/api/orders/admin/invoices?ids=${ids.join(',')}`, `Miladys-Invoices-${ids.length}.pdf`),
 

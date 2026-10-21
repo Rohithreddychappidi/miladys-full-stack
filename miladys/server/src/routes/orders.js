@@ -5,6 +5,7 @@ import { razorpay, razorpayEnabled, verifyPaymentSignature, verifyWebhookSignatu
 import { confirmPaidOrder, razorpayPaymentState } from '../lib/payments.js';
 import { stockForLine, returnStock } from '../lib/stock.js';
 import { checkAddress } from '../lib/address.js';
+import { issueRefund, retryRefund, applyRefundEvent, refundsFor, refundableLeft } from '../lib/refunds.js';
 import { sendCancellationEmail, sendShippedEmail, sendDeliveredEmail } from '../lib/email.js';
 import { renderInvoice, renderInvoices } from '../lib/invoice.js';
 import { getStoreInfo } from '../lib/storeInfo.js';
@@ -207,6 +208,17 @@ export async function razorpayWebhook(req, res) {
   }
   let event;
   try { event = JSON.parse(raw.toString('utf8')); } catch { return res.status(400).json({ error: 'Bad payload.' }); }
+  // Refund updates (Razorpay webhook events refund.processed / refund.failed).
+  if (String(event?.event || '').startsWith('refund.')) {
+    try {
+      const refund = await applyRefundEvent(event.event, event?.payload?.refund?.entity);
+      if (refund) console.log(`[webhook] refund #${refund.id} for order #MLD${refund.order_id} is now ${refund.status}`);
+    } catch (err) {
+      console.error('[webhook] refund update failed', err);
+      return res.status(500).json({ error: 'Could not process.' });
+    }
+    return res.json({ ok: true });
+  }
   const payment = event?.payload?.payment?.entity;
   if (['payment.captured', 'order.paid'].includes(event?.event) && payment?.order_id && payment.status === 'captured') {
     try {
@@ -285,11 +297,14 @@ router.post('/:id/cancel', requireAuth, async (req, res) => {
   // of whether the refund call itself succeeds, so a Razorpay hiccup here
   // doesn't leave the order stuck — worst case, an admin issues the refund
   // manually from the Razorpay dashboard using the payment ID on the order.
-  if (refundAmount > 0 && razorpayEnabled && order.razorpay_payment_id) {
+  // Recorded in `refunds`; a refund Razorpay refuses shows as failed in
+  // Admin → Orders (and the store is emailed) so it can be retried.
+  let refund = null;
+  if (refundAmount > 0) {
     try {
-      await razorpay.payments.refund(order.razorpay_payment_id, { amount: refundAmount * 100 });
+      refund = await issueRefund(order, { amount: refundAmount, kind: 'cancellation', by: 'customer' });
     } catch (err) {
-      console.error('[orders/cancel] Razorpay refund failed — needs manual refund', order.id, err.message);
+      console.error('[orders/cancel] refund not created', order.id, err.message);
     }
   }
 
@@ -299,10 +314,10 @@ router.post('/:id/cancel', requireAuth, async (req, res) => {
   // expect a clear "your order was cancelled" email from the store itself.
   const { rows: userRows } = await query('SELECT * FROM users WHERE id = $1', [req.user.id]);
   if (userRows[0]) {
-    sendCancellationEmail(userRows[0], order, { refundPercent: tier.refund_percent, refundAmount, tierLabel: tier.label }).catch(() => {});
+    sendCancellationEmail(userRows[0], order, { refundPercent: tier.refund_percent, refundAmount, tierLabel: tier.label, refundStatus: refund?.status || (refundAmount ? 'failed' : null) }).catch(() => {});
   }
 
-  res.json({ ok: true, refundPercent: tier.refund_percent, refundAmount, tierLabel: tier.label });
+  res.json({ ok: true, refundPercent: tier.refund_percent, refundAmount, tierLabel: tier.label, refundStatus: refund?.status || null });
 });
 
 // GET /api/orders — the logged-in user's own orders, with items + payment status.
@@ -311,7 +326,8 @@ router.get('/', requireAuth, async (req, res) => {
   const { rows: items } = orders.length
     ? await query('SELECT * FROM order_items WHERE order_id = ANY($1)', [orders.map((o) => o.id)])
     : { rows: [] };
-  res.json({ orders: orders.map((o) => ({ ...o, items: items.filter((i) => i.order_id === o.id) })) });
+  const refunds = await refundsFor(orders.map((o) => o.id));
+  res.json({ orders: orders.map((o) => ({ ...o, items: items.filter((i) => i.order_id === o.id), refunds: refunds[o.id] || [] })) });
 });
 
 // GET /api/orders/admin — every order + payment details, for the admin panel.
@@ -324,7 +340,90 @@ router.get('/admin/all', requireAdmin, async (_req, res) => {
   const { rows: items } = orders.length
     ? await query('SELECT * FROM order_items WHERE order_id = ANY($1)', [orders.map((o) => o.id)])
     : { rows: [] };
-  res.json({ orders: orders.map((o) => ({ ...o, items: items.filter((i) => i.order_id === o.id) })) });
+  const refunds = await refundsFor(orders.map((o) => o.id));
+  res.json({ orders: orders.map((o) => ({ ...o, items: items.filter((i) => i.order_id === o.id), refunds: refunds[o.id] || [] })) });
+});
+
+// POST /api/orders/admin/:id/cancel — the store cancels a paid order.
+// Body: { refundAmount (₹, 0 for none), reason, restock (put the sarees
+// back in stock — default: yes unless it has already shipped) }.
+router.post('/admin/:id/cancel', requireAdmin, async (req, res) => {
+  const { rows } = await query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+  const order = rows[0];
+  if (!order) return res.status(404).json({ error: 'Order not found.' });
+  if (order.status !== 'paid' && order.status !== 'paid_oversold') return res.status(400).json({ error: 'Only paid orders can be cancelled.' });
+  const amount = Math.round(Number(req.body?.refundAmount) || 0);
+  const left = await refundableLeft(order);
+  if (amount < 0 || amount > left) return res.status(400).json({ error: `The refund can be ₹0 to ₹${left.toLocaleString('en-IN')}.` });
+  const reason = String(req.body?.reason || '').trim().slice(0, 300);
+  const restock = req.body?.restock ?? order.shipping_status === 'pending';
+  const payable = order.subtotal - (order.discount || 0) + (order.shipping_fee || 0);
+
+  const { rows: items } = await query('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: flipped } = await client.query(
+      `UPDATE orders SET status = 'cancelled', cancelled_at = now(), refund_percent = $1
+        WHERE id = $2 AND status IN ('paid', 'paid_oversold') RETURNING id`,
+      [payable ? Math.round((amount / payable) * 100) : 0, order.id]
+    );
+    if (!flipped.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'This order was already cancelled.' });
+    }
+    if (restock) for (const item of items) await returnStock(client, item.product_id, item.color, item.stock_reserved ?? item.qty);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[orders/admin cancel]', err);
+    return res.status(500).json({ error: 'Could not cancel the order. Nothing was changed.' });
+  } finally {
+    client.release();
+  }
+
+  let refund = null;
+  let refundError = null;
+  if (amount > 0) {
+    try {
+      refund = await issueRefund(order, { amount, kind: 'admin_cancel', reason, by: 'admin' });
+    } catch (err) {
+      refundError = err.message;
+    }
+  }
+  const { rows: u } = await query('SELECT * FROM users WHERE id = $1', [order.user_id]);
+  if (u[0] && req.body?.notify !== false) {
+    sendCancellationEmail(u[0], order, { refundAmount: amount, refundStatus: refund?.status || null, byStore: true, reason }).catch(() => {});
+  }
+  res.json({ ok: true, refund, refundError });
+});
+
+// POST /api/orders/admin/:id/refund — refund part or all of a paid (or
+// cancelled) order without changing its status, e.g. for a return after
+// delivery or a goodwill refund. Body: { amount (₹), reason }.
+router.post('/admin/:id/refund', requireAdmin, async (req, res) => {
+  const { rows } = await query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+  const order = rows[0];
+  if (!order) return res.status(404).json({ error: 'Order not found.' });
+  if (!['paid', 'paid_oversold', 'cancelled'].includes(order.status) || !order.paid_at) {
+    return res.status(400).json({ error: 'Only paid orders can be refunded.' });
+  }
+  try {
+    const refund = await issueRefund(order, { amount: req.body?.amount, kind: 'refund', reason: String(req.body?.reason || '').trim(), by: 'admin' });
+    res.json({ ok: true, refund });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/orders/admin/refunds/:refundId/retry — send a failed refund again.
+router.post('/admin/refunds/:refundId/retry', requireAdmin, async (req, res) => {
+  try {
+    const refund = await retryRefund(Number(req.params.refundId));
+    res.json({ ok: true, refund });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // PUT /api/orders/admin/shipping — update fulfilment for one or many paid

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../data/api';
 import { formatINR } from '../../data/store';
 import { waHref } from '../../data/storeInfo';
+import OrderRefunds from './OrderRefunds';
 
 const statusLabels = {
   paid: 'Paid',
@@ -27,6 +28,8 @@ const TABS = [
   { key: 'attention', label: 'Needs attention', test: (o) => o.status === 'paid_oversold' },
   { key: 'created', label: 'Payment pending', test: (o) => o.status === 'created' },
   { key: 'cancelled', label: 'Cancelled', test: (o) => o.status === 'cancelled' },
+  // Orders with a refund, failed or still processing ones first in mind.
+  { key: 'refunds', label: 'Refunds', test: (o) => (o.refunds || []).length > 0 },
   { key: 'expired', label: 'Expired', test: (o) => o.status === 'expired' },
   { key: 'failed', label: 'Failed', test: (o) => o.status === 'failed' },
 ];
@@ -133,6 +136,7 @@ export default function AdminOrders() {
       .finally(() => setLoading(false));
   }, []);
 
+  const failedRefunds = orders.reduce((n, o) => n + (o.refunds || []).filter((r) => r.status === 'failed').length, 0);
   const counts = useMemo(
     () => Object.fromEntries(TABS.map((t) => [t.key, orders.filter(t.test).length])),
     [orders]
@@ -152,9 +156,14 @@ export default function AdminOrders() {
 
   useEffect(() => { setLimit(PAGE); }, [tab, search, dateRange]);
 
-  function flash(msg) {
+  const [noticeTone, setNoticeTone] = useState('ok');
+  // One timer at a time, so an earlier message's timer can't clear a newer one.
+  const noticeTimer = useRef(null);
+  function flash(msg, tone = 'ok') {
+    setNoticeTone(tone);
     setNotice(msg);
-    setTimeout(() => setNotice(''), 4000);
+    clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(''), 8000);
   }
 
   function toggle(id) {
@@ -273,6 +282,7 @@ export default function AdminOrders() {
         {TABS.map((t) => (
           <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={'order-tab' + (tab === t.key ? ' active' : '')} onClick={() => setTab(t.key)}>
             {t.label} <span className="count">{counts[t.key]}</span>
+            {t.key === 'refunds' && failedRefunds > 0 && <span className="tab-alert">{failedRefunds} failed</span>}
           </button>
         ))}
       </div>
@@ -295,7 +305,7 @@ export default function AdminOrders() {
       </div>
 
       {error && <p className="admin-error" role="alert">{error}</p>}
-      {notice && <p className="admin-notice" role="status">{notice}</p>}
+      {notice && <p className={`admin-notice${noticeTone === 'error' ? ' is-error' : ''}`} role="status">{notice}</p>}
 
       {tab === 'expired' && counts.expired > 0 && (
         <div className="expired-note">
@@ -362,7 +372,11 @@ export default function AdminOrders() {
               )}
               {o.status === 'cancelled' && (
                 <div className="cancelled-banner">
-                  Cancelled by customer — {o.refund_percent}% refund ({formatINR(o.refund_amount || 0)}) {o.razorpay_payment_id ? 'was attempted automatically via Razorpay. Verify it went through in the Razorpay dashboard.' : 'is owed — no payment ID on file, so this needs a manual refund.'}
+                  {(o.refunds || []).some((r) => r.kind === 'admin_cancel') ? 'Cancelled by the store' : 'Cancelled by customer'}
+                  {(o.refunds || []).length === 0 && Number(o.refund_amount) > 0 && (
+                    // Cancelled before refunds were tracked.
+                    <> — {o.refund_percent}% refund ({formatINR(o.refund_amount)}) was sent to Razorpay before refunds were tracked here; check it in the Razorpay dashboard.</>
+                  )}
                 </div>
               )}
 
@@ -460,6 +474,11 @@ export default function AdminOrders() {
                   <a className="btn btn-outline small wa-btn" href={waHref(wa, waMessage(o))} target="_blank" rel="noreferrer">WhatsApp customer</a>
                 )}
               </div>
+              <OrderRefunds
+                order={o}
+                onMessage={flash}
+                onChanged={() => api.getAllOrders().then(({ orders: fresh }) => setOrders(fresh)).catch((err) => setError(err.message))}
+              />
             </div>
             );
           })}
@@ -486,6 +505,8 @@ export default function AdminOrders() {
         .order-tab { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--stone-200); background: var(--paper); font-size: 12.5px; color: var(--ink-600); cursor: pointer; }
         .order-tab.active { background: var(--maroon-900); border-color: var(--maroon-900); color: var(--ivory); }
         .order-tab .count { opacity: 0.7; margin-left: 4px; }
+        .admin-notice.is-error { color: #a13a3a; background: #f6e3e3; }
+        .tab-alert { margin-left: 6px; background: #a13a3a; color: #fff; border-radius: 999px; padding: 1px 7px; font-size: 10.5px; font-weight: 700; }
         .order-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
         .order-search { flex: 1; min-width: 220px; padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--stone-200); font-size: 13.5px; background: var(--paper); }
         .order-toolbar select { padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--stone-200); font-size: 13px; background: var(--paper); }

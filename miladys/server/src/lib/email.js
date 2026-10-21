@@ -259,41 +259,89 @@ export function sendOrderConfirmationEmail(user, order, items) {
   });
 }
 
-export function sendCancellationEmail(user, order, { refundPercent, refundAmount, tierLabel }) {
+// `refundStatus`: 'processed' | 'pending' | 'failed' | null (no refund).
+// `byStore`: cancelled by the store (Admin → Orders) rather than the customer.
+export function sendCancellationEmail(user, order, { refundPercent, refundAmount, tierLabel, refundStatus = 'pending', byStore = false, reason = '' }) {
   const payable = order.subtotal - (order.discount || 0);
+  const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
+  const detail = refundPercent != null && tierLabel
+    ? ` <span style="font-weight:400;color:${COLORS.ink600};font-size:13px;">(${refundPercent}% of ${inr(payable)} — ${escapeHtml(tierLabel)})</span>`
+    : '';
+  const note = !refundAmount
+    ? 'No refund applies to this cancellation. If you think that&rsquo;s wrong, just reply to this email.'
+    : refundStatus === 'processed'
+      ? 'Razorpay has processed this refund to your original payment method. It usually shows in your account within 5&ndash;7 business days.'
+      : refundStatus === 'failed'
+        ? 'We&rsquo;re arranging this refund and will email you as soon as it has been processed.'
+        : 'This refund has been sent to your original payment method via Razorpay. It usually shows within 5&ndash;7 business days &mdash; we&rsquo;ll email you once it&rsquo;s processed.';
   const content = `
     <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:400;color:${COLORS.maroon900};margin:0 0 6px;">
       Order cancelled
     </h1>
     <p style="font-size:14px;line-height:1.7;color:${COLORS.ink600};margin:0 0 22px;">
-      Hi ${escapeHtml(user.name)}, your order <strong style="color:${COLORS.ink900};">#MLD${order.id}</strong> has been cancelled as requested.
+      Hi ${escapeHtml(user.name)}, your order <strong style="color:${COLORS.ink900};">#MLD${order.id}</strong> has been cancelled${byStore ? ' by our team' : ' as requested'}.${reason ? ` ${escapeHtml(reason)}` : ''}
     </p>
-
+    ${refundAmount ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${COLORS.stone100};border-radius:10px;margin-bottom:20px;">
       <tr>
         <td style="padding:16px 18px;">
           <p style="margin:0 0 4px;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:${COLORS.ink400};font-weight:600;">Refund</p>
-          <p style="margin:0;font-size:15px;line-height:1.6;color:${COLORS.maroon900};font-weight:700;">
-            ₹${refundAmount.toLocaleString('en-IN')} <span style="font-weight:400;color:${COLORS.ink600};font-size:13px;">(${refundPercent}% of ₹${payable.toLocaleString('en-IN')} — ${escapeHtml(tierLabel)})</span>
-          </p>
+          <p style="margin:0;font-size:15px;line-height:1.6;color:${COLORS.maroon900};font-weight:700;">${inr(refundAmount)}${detail}</p>
         </td>
       </tr>
-    </table>
-
-    <p style="font-size:12px;color:${COLORS.ink400};margin:0;">
-      This refund is being processed to your original payment method via Razorpay and typically reflects within 5&ndash;7 business days. If you don&rsquo;t see it by then, feel free to reach out and we&rsquo;ll look into it.
-    </p>
+    </table>` : ''}
+    <p style="font-size:12px;color:${COLORS.ink400};margin:0;">${note}</p>
   `;
 
   return send({
     to: user.email,
     subject: `Order cancelled — #MLD${order.id} · Milady's`,
     html: layout({
-      preheader: `Your order #MLD${order.id} has been cancelled — ${refundPercent}% refund (₹${refundAmount.toLocaleString('en-IN')}) is on its way.`,
+      preheader: refundAmount ? `Your order #MLD${order.id} has been cancelled — refund of ${inr(refundAmount)}.` : `Your order #MLD${order.id} has been cancelled.`,
       content,
       ctaLabel: 'View your orders',
       ctaUrl: `${siteUrl}/orders`,
     }),
+  });
+}
+
+// Razorpay has returned the money (webhook refund.processed, or processed
+// straight away).
+export function sendRefundProcessedEmail(user, order, refund) {
+  const content = `
+    <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:400;color:${COLORS.maroon900};margin:0 0 6px;">
+      Refund processed
+    </h1>
+    <p style="font-size:14px;line-height:1.7;color:${COLORS.ink600};margin:0 0 18px;">
+      Hi ${escapeHtml(user.name)}, your refund of <strong style="color:${COLORS.ink900};">₹${Number(refund.amount).toLocaleString('en-IN')}</strong>
+      for order <strong style="color:${COLORS.ink900};">#MLD${order.id}</strong> has been processed to your original payment method.
+      Banks usually show it within 5&ndash;7 business days.
+    </p>
+    ${refund.razorpay_refund_id ? `<p style="font-size:12px;color:${COLORS.ink400};margin:0;">Refund reference: ${escapeHtml(refund.razorpay_refund_id)} &mdash; quote this to your bank if you need to trace it.</p>` : ''}
+  `;
+  return send({
+    to: user.email,
+    subject: `Refund processed — #MLD${order.id} · Milady's`,
+    html: layout({ preheader: `₹${Number(refund.amount).toLocaleString('en-IN')} refunded for order #MLD${order.id}`, content, ctaLabel: 'View your orders', ctaUrl: `${siteUrl}/orders` }),
+  });
+}
+
+// To the store: a refund didn't go through and needs attention.
+export function sendRefundFailedAlert(storeEmail, order, refund) {
+  const content = `
+    <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:400;color:${COLORS.maroon900};margin:0 0 6px;">
+      A refund needs attention
+    </h1>
+    <p style="font-size:14px;line-height:1.7;color:${COLORS.ink600};margin:0 0 12px;">
+      The refund of <strong>₹${Number(refund.amount).toLocaleString('en-IN')}</strong> for order <strong>#MLD${order.id}</strong> did not go through.
+    </p>
+    <p style="font-size:13px;color:${COLORS.ink900};margin:0 0 12px;"><strong>Reason from Razorpay:</strong> ${escapeHtml(refund.error || 'not given')}</p>
+    <p style="font-size:13px;color:${COLORS.ink600};margin:0;">Open Admin &rarr; Orders &rarr; #MLD${order.id} and use <strong>Retry refund</strong> (for example after topping up the Razorpay balance), or refund it from the Razorpay dashboard.</p>
+  `;
+  return send({
+    to: storeEmail,
+    subject: `Refund failed — #MLD${order.id} · action needed`,
+    html: layout({ preheader: `Refund for #MLD${order.id} failed`, content, ctaLabel: 'Open Admin → Orders', ctaUrl: `${siteUrl}/admin/orders?tab=refunds` }),
   });
 }
 

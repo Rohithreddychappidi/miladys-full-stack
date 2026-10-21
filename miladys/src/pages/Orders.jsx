@@ -154,12 +154,10 @@ export default function Orders() {
     setCancelError('');
     setCancellingId(order.id);
     try {
-      const result = await api.cancelOrder(order.id);
-      setOrders((prev) => prev.map((o) => (
-        o.id === order.id
-          ? { ...o, status: 'cancelled', refund_percent: result.refundPercent, refund_amount: result.refundAmount }
-          : o
-      )));
+      await api.cancelOrder(order.id);
+      // Reload so the refund and its status show straight away.
+      const { orders: fresh } = await api.getMyOrders();
+      setOrders(fresh);
     } catch (err) {
       setCancelError(err.message);
     } finally {
@@ -273,11 +271,24 @@ export default function Orders() {
                     </div>
                   </div>
 
-                  {o.status === 'cancelled' && o.refund_percent != null && (
+                  {(o.refunds || []).length > 0 ? (
+                    <ul className="refund-lines">
+                      {o.refunds.map((r) => (
+                        <li key={r.id} className={`refund-line r-${r.status}`}>
+                          Refund {formatINR(r.amount)} —{' '}
+                          {r.status === 'processed'
+                            ? <>returned to your original payment method on {new Date(r.updated_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} (banks take up to 5–7 working days to show it){r.razorpay_refund_id ? <span className="refund-ref"> · Ref {r.razorpay_refund_id}</span> : null}</>
+                            : r.status === 'pending'
+                              ? 'being processed by Razorpay — usually 5–7 working days'
+                              : 'being arranged by our team — we\'ll email you once it\'s sent'}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : o.status === 'cancelled' && Number(o.refund_amount) > 0 ? (
                     <p className="refund-note">
                       Cancelled — {o.refund_percent}% refund ({formatINR(o.refund_amount || 0)}) will be credited to your original payment method.
                     </p>
-                  )}
+                  ) : null}
 
                   <div className="order-card-actions">
                     {o.paid_at && (
@@ -395,6 +406,11 @@ export default function Orders() {
         .payment-id { display: block; font-size: 11px; color: var(--ink-400); margin-top: 2px; }
 
         .refund-note { font-size: 12px; color: #3c7a3c; margin: 12px 0 0; }
+        .refund-lines { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 4px; }
+        .refund-line { font-size: 12px; line-height: 1.5; color: var(--ink-700); }
+        .refund-line.r-processed { color: #2f6b2f; }
+        .refund-line.r-pending { color: #8a5a10; }
+        .refund-ref { color: var(--ink-400); }
         .order-card-actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
         .invoice-btn, .cancel-btn, .reorder-btn { font-size: 12.5px; padding: 9px 18px; margin-top: 0; }
         .reorder-note { font-size: 12px; color: var(--ink-600); margin: 10px 0 0; }

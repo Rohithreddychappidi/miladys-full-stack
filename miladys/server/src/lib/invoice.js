@@ -150,10 +150,13 @@ function drawInvoice(doc, { order, items, customer }, store) {
     totalsRows.push([`Discount${order.coupon_code ? ` (${order.coupon_code})` : ''}`, `-${formatINR(order.discount)}`]);
   }
   totalsRows.push(['Shipping', order.shipping_fee ? formatINR(order.shipping_fee) : 'Free']);
-  const refunded = order.status === 'cancelled' && order.refund_amount ? Number(order.refund_amount) : 0;
+  // Any refund (cancellation, return or goodwill) — total of refunds that
+  // haven't failed, kept in orders.refund_amount.
+  const refunded = Number(order.refund_amount) > 0 ? Number(order.refund_amount) : 0;
   if (refunded) {
     totalsRows.push(['Amount paid', formatINR(payable)]);
-    totalsRows.push([`Refunded (${order.refund_percent}%)`, `-${formatINR(refunded)}`]);
+    const pct = order.status === 'cancelled' && order.refund_percent != null ? ` (${order.refund_percent}%)` : '';
+    totalsRows.push([`Refunded${pct}`, `-${formatINR(refunded)}`]);
   }
   doc.font('Regular').fontSize(9.5);
   for (const [label, value] of totalsRows) {

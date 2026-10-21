@@ -33,6 +33,7 @@ export default function AdminDashboard() {
           paidOrders: paid.length,
           toShip: paid.filter((o) => (o.shipping_status || 'pending') === 'pending').length,
           attention: orders.filter((o) => o.status === 'paid_oversold').length,
+          refundIssues: orders.reduce((n, o) => n + (o.refunds || []).filter((r) => r.status === 'failed').length, 0),
           unread,
           pendingReviews: pending,
         });
@@ -44,6 +45,7 @@ export default function AdminDashboard() {
   const cards = [
     { to: '/admin/orders?tab=to_ship', label: 'Orders to ship', value: stats?.toShip, alert: stats?.toShip > 0, note: stats?.attention ? `${stats.attention} need attention` : '' },
     { to: '/admin/messages', label: 'Unread messages', value: stats?.unread, alert: stats?.unread > 0 },
+    ...(stats?.refundIssues ? [{ to: '/admin/orders?tab=refunds', label: 'Refunds that failed', value: stats.refundIssues, alert: true }] : []),
     { to: '/admin/reviews', label: 'Reviews to approve', value: stats?.pendingReviews, alert: stats?.pendingReviews > 0 },
     { to: '/admin/products?stock=out', label: 'Out of stock', value: stats?.outOfStock },
     { to: '/admin/products?stock=low', label: 'Low stock (1–5 left)', value: stats?.lowStock?.length },

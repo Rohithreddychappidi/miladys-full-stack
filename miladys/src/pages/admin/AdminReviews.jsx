@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../data/api';
+import { useNotice } from '../../utils/useNotice';
 
 // Admin → Reviews. Customers who bought a saree can review it from its
 // product page (or the "Write a review" links in My Orders and the
@@ -23,7 +24,7 @@ export default function AdminReviews() {
   const [zoomSrc, setZoomSrc] = useState(null);
   const [selected, setSelected] = useState(() => new Set());
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState('');
+  const [notice, showNotice] = useNotice();
 
   useEffect(() => {
     refresh(true);
@@ -79,8 +80,7 @@ export default function AdminReviews() {
       const { count } = await api.bulkReviews(allPending ? { action, allPending: true } : { action, ids: [...selected] });
       setSelected(new Set());
       const done = { publish: 'published', hide: 'hidden', delete: 'deleted' }[action];
-      setNotice(`${count} review${count === 1 ? '' : 's'} ${done}.`);
-      setTimeout(() => setNotice(''), 3500);
+      showNotice(`${count} review${count === 1 ? '' : 's'} ${done}.`, 3500);
       refresh();
     } catch (err) {
       setError(`${verb} failed: ${err.message}`);

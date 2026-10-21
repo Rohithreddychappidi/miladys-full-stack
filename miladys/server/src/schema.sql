@@ -190,6 +190,26 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS review_requested_at TIMESTAMPTZ;
 -- Deliveries abroad: the address's country (India unless chosen otherwise).
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS address_country TEXT NOT NULL DEFAULT 'India';
 ALTER TABLE addresses ADD COLUMN IF NOT EXISTS country TEXT NOT NULL DEFAULT 'India';
+
+-- Refunds — one row per refund sent to Razorpay (customer cancellation,
+-- admin cancel & refund, or an admin refund such as for a return).
+-- status: pending (sent, Razorpay processing) | processed (money returned)
+--       | failed (Razorpay refused — retry from Admin → Orders).
+-- orders.refund_amount is kept as the total of refunds that haven't failed.
+CREATE TABLE IF NOT EXISTS refunds (
+  id                 SERIAL PRIMARY KEY,
+  order_id           INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  razorpay_refund_id TEXT UNIQUE,
+  amount             INTEGER NOT NULL CHECK (amount > 0),
+  status             TEXT NOT NULL DEFAULT 'pending',
+  kind               TEXT NOT NULL DEFAULT 'cancellation',
+  reason             TEXT,
+  requested_by       TEXT NOT NULL DEFAULT 'customer',
+  error              TEXT,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_refunds_order ON refunds(order_id);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS courier TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_number TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_url TEXT;

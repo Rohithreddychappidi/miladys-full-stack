@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../data/api';
+import { useNotice } from '../../utils/useNotice';
 import { formatINR } from '../../data/store';
 import { compressImageFile } from '../../utils/compressImage';
 import { thumbUrl } from '../../utils/images';
@@ -92,7 +93,7 @@ export default function AdminProducts() {
   // Ticked products in the list, for "Combine as colours".
   const [picked, setPicked] = useState(() => new Set());
   const [combining, setCombining] = useState(false);
-  const [notice, setNotice] = useState('');
+  const [notice, showNotice] = useNotice();
   const colourPhotosInput = useRef(null);
 
   useEffect(() => {
@@ -341,8 +342,7 @@ export default function AdminProducts() {
           await api.createProduct({ ...payload, allowDuplicate: true });
         }
       }
-      setNotice(editingId ? 'Saved ✓' : 'Product added ✓');
-      setTimeout(() => setNotice(''), 3000);
+      showNotice(editingId ? 'Saved ✓' : 'Product added ✓', 3000);
       resetForm();
       refresh();
     } catch (err) {
@@ -876,8 +876,7 @@ export default function AdminProducts() {
               onDone={(target) => {
                 setCombining(false);
                 setPicked(new Set());
-                setNotice(`Combined into "${target.name}" — open it to check the colours.`);
-                setTimeout(() => setNotice(''), 5000);
+                showNotice(`Combined into "${target.name}" — open it to check the colours.`, 5000);
                 refresh();
               }}
             />
