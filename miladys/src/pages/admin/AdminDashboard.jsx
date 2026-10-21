@@ -16,8 +16,9 @@ export default function AdminDashboard() {
       api.getAllCategoriesAdmin(),
       api.getAllOrders(),
       api.getUnreadMessages().catch(() => ({ unread: 0 })),
+      api.getPendingReviews().catch(() => ({ pending: 0 })),
     ])
-      .then(([{ products }, { categories }, { orders }, { unread }]) => {
+      .then(([{ products }, { categories }, { orders }, { unread }, { pending }]) => {
         if (!active) return;
         const live = products.filter((p) => p.active !== false);
         const paid = orders.filter((o) => o.status === 'paid' || o.status === 'paid_oversold');
@@ -33,6 +34,7 @@ export default function AdminDashboard() {
           toShip: paid.filter((o) => (o.shipping_status || 'pending') === 'pending').length,
           attention: orders.filter((o) => o.status === 'paid_oversold').length,
           unread,
+          pendingReviews: pending,
         });
       })
       .catch((err) => active && setError(err.message));
@@ -42,6 +44,7 @@ export default function AdminDashboard() {
   const cards = [
     { to: '/admin/orders?tab=to_ship', label: 'Orders to ship', value: stats?.toShip, alert: stats?.toShip > 0, note: stats?.attention ? `${stats.attention} need attention` : '' },
     { to: '/admin/messages', label: 'Unread messages', value: stats?.unread, alert: stats?.unread > 0 },
+    { to: '/admin/reviews', label: 'Reviews to approve', value: stats?.pendingReviews, alert: stats?.pendingReviews > 0 },
     { to: '/admin/products?stock=out', label: 'Out of stock', value: stats?.outOfStock },
     { to: '/admin/products?stock=low', label: 'Low stock (1–5 left)', value: stats?.lowStock?.length },
     { to: '/admin/products', label: 'Products on the store', value: stats?.products, note: stats?.hidden ? `${stats.hidden} hidden` : '' },

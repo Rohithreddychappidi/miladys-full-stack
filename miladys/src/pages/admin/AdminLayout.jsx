@@ -14,7 +14,7 @@ const links = [
   { to: '/admin/messages', label: 'Messages', badge: 'messages' },
   { to: '/admin/coupons', label: 'Coupons' },
   { to: '/admin/cancellation-policy', label: 'Cancellation Policy' },
-  { to: '/admin/reviews', label: 'Reviews' },
+  { to: '/admin/reviews', label: 'Reviews', badge: 'reviews' },
   { to: '/admin/testimonials', label: 'Testimonials' },
   { to: '/admin/store', label: 'Footer & Contact' },
   { to: '/admin/policies', label: 'Policy Pages' },
@@ -23,12 +23,15 @@ const links = [
 // Number of unread Contact-form messages, for the badge in the menu.
 // Refreshes on navigation and when the Messages page changes something.
 function useUnreadMessages(enabled) {
-  const [unread, setUnread] = useState(0);
+  const [unread, setUnread] = useState({ messages: 0, reviews: 0 });
   const location = useLocation();
   useEffect(() => {
     if (!enabled) return undefined;
     let active = true;
-    const load = () => api.getUnreadMessages().then(({ unread: n }) => active && setUnread(n)).catch(() => {});
+    const load = () => Promise.all([
+      api.getUnreadMessages().then(({ unread: n }) => n).catch(() => 0),
+      api.getPendingReviews().then(({ pending: n }) => n).catch(() => 0),
+    ]).then(([messages, reviews]) => active && setUnread({ messages, reviews }));
     load();
     window.addEventListener('admin-messages-changed', load);
     return () => { active = false; window.removeEventListener('admin-messages-changed', load); };
@@ -112,7 +115,7 @@ export default function AdminLayout() {
               className={({ isActive }) => 'admin-link' + (isActive ? ' active' : '')}
             >
               {l.label}
-              {l.badge === 'messages' && unread > 0 && <span className="nav-badge" aria-label={`${unread} unread`}>{unread}</span>}
+              {l.badge && unread[l.badge] > 0 && <span className="nav-badge" aria-label={`${unread[l.badge]} new`}>{unread[l.badge]}</span>}
             </NavLink>
           ))}
         </nav>

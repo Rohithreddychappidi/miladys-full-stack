@@ -26,7 +26,11 @@ async function send({ to, subject, html, replyTo }) {
     return { skipped: true };
   }
   try {
-    return await resend.emails.send({ from: fromEmail, to, subject, html, ...(replyTo ? { replyTo } : {}) });
+    // Resend reports a rejected email (bad address, unverified domain…) in
+    // the result rather than throwing, so log that too.
+    const result = await resend.emails.send({ from: fromEmail, to, subject, html, ...(replyTo ? { replyTo } : {}) });
+    if (result?.error) console.error('[email:error]', subject, '—', result.error.message || JSON.stringify(result.error));
+    return result;
   } catch (err) {
     // Email failures should never break the order/login flow — log and move on.
     console.error('[email:error]', err.message);
@@ -333,20 +337,35 @@ export function sendShippedEmail(user, order, items) {
   });
 }
 
-export function sendDeliveredEmail(user, order) {
+export function sendDeliveredEmail(user, order, items = []) {
+  // One "Write a review" link per saree, straight to its review form.
+  const reviewable = items.filter((i) => i.product_id);
+  const reviewLinks = reviewable.length
+    ? `<p style="font-size:13px;color:${COLORS.ink900};margin:0 0 8px;"><strong>How did you like it?</strong> A quick review helps other customers:</p>
+       <ul style="padding-left:18px;margin:0 0 6px;font-size:13px;color:${COLORS.ink600};">
+         ${reviewable.map((i) => `<li style="margin-bottom:4px;">${escapeHtml(i.product_name)}${i.color ? ` (${escapeHtml(i.color)})` : ''} — <a href="${siteUrl}/products/${encodeURIComponent(i.product_id)}?review=1#reviews" style="color:${COLORS.maroon900};">Write a review</a></li>`).join('')}
+       </ul>`
+    : '';
   const content = `
     <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:400;color:${COLORS.maroon900};margin:0 0 6px;">
       Delivered
     </h1>
     <p style="font-size:14px;line-height:1.7;color:${COLORS.ink600};margin:0 0 18px;">
       Hi ${escapeHtml(user.name)}, order <strong style="color:${COLORS.ink900};">#MLD${order.id}</strong> has been delivered. We hope you love your saree!
-      If anything isn't right, reply to this email or reach us on WhatsApp within 48 hours.
+      If anything isn't right, reach us on WhatsApp or through the Contact page within 48 hours.
     </p>
+    ${reviewLinks}
   `;
+  const first = reviewable[0];
   return send({
     to: user.email,
     subject: `Delivered — #MLD${order.id} · Milady's`,
-    html: layout({ preheader: `Order #MLD${order.id} has been delivered`, content, ctaLabel: 'Leave a review', ctaUrl: `${siteUrl}/orders` }),
+    html: layout({
+      preheader: `Order #MLD${order.id} has been delivered`,
+      content,
+      ctaLabel: 'Leave a review',
+      ctaUrl: first ? `${siteUrl}/products/${encodeURIComponent(first.product_id)}?review=1#reviews` : `${siteUrl}/orders`,
+    }),
   });
 }
 

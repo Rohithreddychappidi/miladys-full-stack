@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import RecommendedProducts from '../components/RecommendedProducts';
 import Seo from '../components/Seo';
 import { api } from '../data/api';
@@ -255,6 +255,9 @@ export default function Orders() {
                           <p>{item.product_name}</p>
                           <span>{item.color ? `Color: ${item.color} · ` : ''}Qty {item.qty} · {formatINR(item.price)}</span>
                         </div>
+                        {isPaid(o) && ship === 'delivered' && item.product_id && (
+                          <Link to={`/products/${item.product_id}?review=1#reviews`} className="review-link">★ Write a review</Link>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -370,6 +373,9 @@ export default function Orders() {
         .order-item img { width: 44px; height: 56px; object-fit: cover; border-radius: 4px; }
         .order-item p { margin: 0 0 2px; }
         .order-item span { font-size: 12px; color: var(--ink-400); }
+        .order-item > div { flex: 1; min-width: 0; }
+        .review-link { flex: none; font-size: 12px; color: var(--maroon-900); border: 1px solid var(--stone-200); border-radius: 999px; padding: 6px 12px; text-decoration: none; white-space: nowrap; }
+        .review-link:hover { border-color: var(--maroon-900); }
 
         .order-card-foot {
           display: flex;

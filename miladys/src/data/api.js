@@ -153,6 +153,9 @@ export const api = {
   // reviews
   getReviews: (productId) => request(`/api/products/${productId}/reviews`, { auth: false }),
   addReview: (productId, payload) => request(`/api/products/${productId}/reviews`, { method: 'POST', body: payload }),
+  getMyReview: (productId) => request(`/api/products/${productId}/reviews/mine`),
+  getPendingReviews: () => request('/api/admin/reviews/pending'),
+  updateReviewSettings: (payload) => request('/api/admin/reviews/settings', { method: 'PUT', body: payload }),
   getAdminReviews: () => request('/api/admin/reviews'),
   approveReview: (id, approved) => request(`/api/admin/reviews/${id}/approve`, { method: 'PUT', body: { approved } }),
   deleteReview: (id) => request(`/api/admin/reviews/${id}`, { method: 'DELETE' }),

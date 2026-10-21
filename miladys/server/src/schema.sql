@@ -125,6 +125,12 @@ CREATE TABLE IF NOT EXISTS reviews (
 -- Safe on every boot: adds the column for databases created before review
 -- photos existed. No-op once present.
 ALTER TABLE reviews ADD COLUMN IF NOT EXISTS photos JSONB NOT NULL DEFAULT '[]'::jsonb;
+-- Review moderation: 'pending' (waiting for admin approval), 'published'
+-- (on the website) or 'hidden'. Older reviews take theirs from `approved`,
+-- which is kept in step for anything still reading it.
+ALTER TABLE reviews ADD COLUMN IF NOT EXISTS status TEXT;
+UPDATE reviews SET status = CASE WHEN approved THEN 'published' ELSE 'hidden' END WHERE status IS NULL;
+ALTER TABLE reviews ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
 
 -- Coupons — admin-created discount codes. `type` is 'percent' or 'flat'.
 -- One redemption per user per coupon is enforced at the DB level via the

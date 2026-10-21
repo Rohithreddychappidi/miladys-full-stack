@@ -399,12 +399,9 @@ router.put('/admin/shipping', requireAdmin, async (req, res) => {
       for (const o of changed) {
         const { rows: u } = await query('SELECT name, email FROM users WHERE id = $1', [o.user_id]);
         if (!u[0]) continue;
-        if (o.shipping_status === 'shipped') {
-          const { rows: items } = await query('SELECT * FROM order_items WHERE order_id = $1', [o.id]);
-          await sendShippedEmail(u[0], o, items);
-        } else {
-          await sendDeliveredEmail(u[0], o);
-        }
+        const { rows: items } = await query('SELECT * FROM order_items WHERE order_id = $1', [o.id]);
+        if (o.shipping_status === 'shipped') await sendShippedEmail(u[0], o, items);
+        else await sendDeliveredEmail(u[0], o, items);
       }
     })().catch((err) => console.error('[orders/shipping] email failed', err.message));
   }

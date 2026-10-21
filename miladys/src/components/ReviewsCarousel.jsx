@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../data/api';
 
@@ -49,7 +50,41 @@ export default function ReviewsCarousel({ productId }) {
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [zoomSrc, setZoomSrc] = useState(null);
+  // This customer's review state: can they review (bought it), and their
+  // existing review if any (the form then edits it).
+  const [mine, setMine] = useState({ canReview: false, review: null, loaded: false });
+  const [notice, setNotice] = useState('');
   const photoInput = useRef(null);
+  const sectionRef = useRef(null);
+  const location = useLocation();
+  const wantsReview = new URLSearchParams(location.search).get('review') === '1' || location.hash === '#reviews';
+
+  useEffect(() => {
+    if (!user) { setMine({ canReview: false, review: null, loaded: true }); return undefined; }
+    let active = true;
+    api.getMyReview(productId)
+      .then(({ canReview, review }) => {
+        if (!active) return;
+        setMine({ canReview, review, loaded: true });
+        if (review) {
+          setRating(review.rating);
+          setComment(review.comment || '');
+          setPhotos(review.photos || []);
+        }
+      })
+      .catch(() => active && setMine({ canReview: false, review: null, loaded: true }));
+    return () => { active = false; };
+  }, [productId, user]);
+
+  // Opened from "Write a review" (My Orders / delivered email): scroll here.
+  useEffect(() => {
+    if (!wantsReview || !loaded || !mine.loaded) return;
+    const t = setTimeout(() => {
+      sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      sectionRef.current?.querySelector('textarea')?.focus({ preventScroll: true });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [wantsReview, loaded, mine.loaded]);
 
   useEffect(() => {
     let active = true;
@@ -101,16 +136,18 @@ export default function ReviewsCarousel({ productId }) {
       return;
     }
     setBusy(true);
+    setNotice('');
     try {
-      const { review } = await api.addReview(productId, { rating, comment, photos });
-      setReviews((prev) => [review, ...prev]);
-      setSummary((s) => ({
-        count: s.count + 1,
-        average: Math.round((((s.average * s.count) + rating) / (s.count + 1)) * 10) / 10,
-      }));
-      setRating(0);
-      setComment('');
-      setPhotos([]);
+      const { review, updated } = await api.addReview(productId, { rating, comment, photos });
+      setMine((m) => ({ ...m, review }));
+      const others = reviews.filter((r) => r.id !== review.id);
+      const next = review.status === 'published' ? [review, ...others] : others;
+      setReviews(next);
+      const avg = next.length ? next.reduce((sum, r) => sum + r.rating, 0) / next.length : 0;
+      setSummary({ count: next.length, average: Math.round(avg * 10) / 10 });
+      setNotice(review.status === 'published'
+        ? (updated ? 'Your review has been updated.' : 'Thank you! Your review is now live.')
+        : 'Thank you! Your review will appear here once it has been approved.');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -121,7 +158,7 @@ export default function ReviewsCarousel({ productId }) {
   if (!loaded) return null;
 
   return (
-    <section className="reviews-block">
+    <section className="reviews-block" id="reviews" ref={sectionRef}>
       <div className="reviews-head">
         <div>
           <h2>Customer Reviews</h2>
@@ -131,7 +168,7 @@ export default function ReviewsCarousel({ productId }) {
               <span>{summary.average} out of 5 · {summary.count} review{summary.count === 1 ? '' : 's'}</span>
             </div>
           ) : (
-            <p className="no-reviews">Be the first to review this saree.</p>
+            <p className="no-reviews">No reviews yet{mine.canReview ? ' — be the first to review this saree.' : '.'}</p>
           )}
         </div>
       </div>
@@ -152,7 +189,10 @@ export default function ReviewsCarousel({ productId }) {
                 </div>
               )}
               <div className="review-meta">
-                <span className="review-name">{r.user_name}</span>
+                <span className="review-name">
+                  {r.user_name}
+                  {r.verified && <span className="verified-badge" title="Bought this saree on Milady's">✓ Verified buyer</span>}
+                </span>
                 <span className="review-date">{new Date(r.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
               </div>
             </div>
@@ -161,9 +201,17 @@ export default function ReviewsCarousel({ productId }) {
       )}
 
       <div className="review-form-wrap">
-        {user ? (
+        {!user ? (
+          <p className="login-prompt">
+            Bought this saree? <Link to="/login" state={{ from: `${location.pathname}?review=1` }}>Log in</Link> to write a review.
+          </p>
+        ) : !mine.loaded ? null : !mine.canReview ? (
+          <p className="login-prompt">Only customers who bought this saree can review it.</p>
+        ) : (
           <form className="review-form" onSubmit={handleSubmit}>
-            <p className="form-label">Rate this product</p>
+            <p className="form-label">{mine.review ? 'Your review' : 'Rate this saree'}</p>
+            {mine.review?.status === 'pending' && !notice && <p className="review-status">Waiting for approval — it will appear here once approved.</p>}
+            {mine.review?.status === 'hidden' && !notice && <p className="review-status">Your review isn&apos;t shown on the website. You can edit it and send it again.</p>}
             <Stars value={rating} onChange={setRating} size={22} />
             <textarea
               placeholder="Share your experience with this saree (optional)"
@@ -190,14 +238,11 @@ export default function ReviewsCarousel({ productId }) {
             <p className="photo-hint">Add up to 3 photos of the saree you received.</p>
 
             {error && <p className="review-error">{error}</p>}
+            {notice && <p className="review-notice" role="status">{notice}</p>}
             <button type="submit" className="btn btn-outline" disabled={busy}>
-              {busy ? 'Posting…' : 'Post Review'}
+              {busy ? 'Posting…' : mine.review ? 'Update Review' : 'Post Review'}
             </button>
           </form>
-        ) : (
-          <p className="login-prompt">
-            <a href="/login">Log in</a> to write a review.
-          </p>
         )}
       </div>
 
@@ -276,6 +321,10 @@ export default function ReviewsCarousel({ productId }) {
         }
         .photo-hint { font-size: 11px; color: var(--ink-400); margin: -6px 0 0; }
         .review-error { font-size: 12.5px; color: #a13a3a; margin: 0; }
+        .review-notice { font-size: 12.5px; color: #1e7039; margin: 0; }
+        .review-status { font-size: 12px; color: var(--ink-600); background: var(--stone-100); padding: 8px 10px; border-radius: var(--radius-sm); margin: 0; }
+        .verified-badge { display: block; font-weight: 500; font-size: 10.5px; color: #1e7039; margin-top: 2px; }
+        .reviews-block { scroll-margin-top: 90px; }
         .review-form .btn { align-self: flex-start; }
         .login-prompt { font-size: 13px; color: var(--ink-600); }
         .login-prompt a { color: var(--gold-600); border-bottom: 1px solid var(--gold-500); }
