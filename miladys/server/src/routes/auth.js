@@ -130,10 +130,13 @@ router.post('/forgot-password', ...limits.forgotPassword, async (req, res) => {
   if (!email?.trim()) return res.status(400).json({ error: 'Email is required.' });
 
   const normalizedEmail = email.trim().toLowerCase();
-  const { rows } = await query('SELECT id, name, email FROM users WHERE email = $1', [normalizedEmail]);
+  const { rows } = await query('SELECT id, name, email, is_admin FROM users WHERE email = $1', [normalizedEmail]);
   const user = rows[0];
 
-  if (user) {
+  // Admin accounts never get an emailed reset link — they reset with their
+  // security questions on the admin sign-in page. (Same reply either way,
+  // so this doesn't reveal which emails are admins.)
+  if (user && !user.is_admin) {
     const rawToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
@@ -160,11 +163,15 @@ router.post('/reset-password', ...limits.resetPassword, async (req, res) => {
 
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
   const { rows } = await query(
-    `SELECT pr.id, pr.user_id, pr.expires_at, pr.used_at
-     FROM password_resets pr WHERE pr.token_hash = $1`,
+    `SELECT pr.id, pr.user_id, pr.expires_at, pr.used_at, u.is_admin
+     FROM password_resets pr JOIN users u ON u.id = pr.user_id WHERE pr.token_hash = $1`,
     [tokenHash]
   );
   const reset = rows[0];
+  // Links sent to an admin before this change stop working too.
+  if (reset?.is_admin) {
+    return res.status(400).json({ error: 'Admin passwords can only be reset with your security questions — use “Forgot password?” on the admin sign-in page.' });
+  }
   if (!reset || reset.used_at || new Date(reset.expires_at) < new Date()) {
     return res.status(400).json({ error: 'This reset link is invalid or has expired. Please request a new one.' });
   }
