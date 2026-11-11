@@ -210,6 +210,21 @@ CREATE TABLE IF NOT EXISTS refunds (
   updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_refunds_order ON refunds(order_id);
+
+-- Admin sign-in security.
+-- token_version: bumped when an admin's password changes, which signs out
+-- every other admin session (admin sign-ins are checked against it).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0;
+-- Security questions for admin password changes and "forgot password".
+-- questions: [{ question, answer_hash }] — answers stored as bcrypt hashes.
+-- Too many wrong answers lock recovery for a while (failed_attempts/locked_until).
+CREATE TABLE IF NOT EXISTS admin_security (
+  user_id         INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  questions       JSONB NOT NULL,
+  failed_attempts INTEGER NOT NULL DEFAULT 0,
+  locked_until    TIMESTAMPTZ,
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS courier TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_number TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_url TEXT;

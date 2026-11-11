@@ -3,6 +3,8 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { api } from '../../data/api';
 import { useAuth } from '../../context/AuthContext';
 import Seo from '../../components/Seo';
+import PasswordInput from '../../components/PasswordInput';
+import { QuestionsDialog, PasswordChecks, passwordProblem } from './AdminAccount';
 
 const links = [
   { to: '/admin', label: 'Dashboard', end: true },
@@ -18,6 +20,7 @@ const links = [
   { to: '/admin/testimonials', label: 'Testimonials' },
   { to: '/admin/store', label: 'Footer & Contact' },
   { to: '/admin/policies', label: 'Policy Pages' },
+  { to: '/admin/account', label: 'Account & Security' },
 ];
 
 // Number of unread Contact-form messages, for the badge in the menu.
@@ -40,22 +43,67 @@ function useUnreadMessages(enabled) {
 }
 
 function AdminLoginGate() {
-  const { login } = useAuth();
+  const { login, logout, adoptSession } = useAuth();
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    setNotice('');
     setBusy(true);
     try {
       const user = await login(form.email, form.password);
-      if (!user.isAdmin) setError('This account does not have admin access.');
+      if (!user.isAdmin) {
+        // A customer account: don't leave it signed in on the admin screen.
+        logout();
+        setError('This account does not have admin access.');
+      }
     } catch (err) {
       setError(err.message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  // Forgot password: email → security questions + new password.
+  const [recovery, setRecovery] = useState(null); // { questions, answers, next, confirm, error }
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
+
+  async function startRecovery() {
+    setError('');
+    setNotice('');
+    const email = form.email.trim();
+    if (!email) { setError('Enter your admin email above first, then tap “Forgot password?”.'); return; }
+    setRecoveryBusy(true);
+    try {
+      const { questions } = await api.adminRecoveryQuestions({ email });
+      setRecovery({ questions, answers: questions.map(() => ''), next: '', confirm: '', error: '' });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRecoveryBusy(false);
+    }
+  }
+
+  async function finishRecovery(e) {
+    e.preventDefault();
+    const fail = (msg) => setRecovery((r) => ({ ...r, error: msg }));
+    if (recovery.answers.some((a) => !a.trim())) return fail('Please answer every question.');
+    const problem = passwordProblem(recovery.next);
+    if (problem) return fail(`New password: ${problem}`);
+    if (recovery.next !== recovery.confirm) return fail('The new passwords don’t match.');
+    setRecoveryBusy(true);
+    try {
+      const { token, user } = await api.adminRecoveryReset({ email: form.email.trim(), answers: recovery.answers, newPassword: recovery.next });
+      setRecovery(null);
+      adoptSession(token, user);
+    } catch (err) {
+      fail(err.message);
+    } finally {
+      setRecoveryBusy(false);
     }
   }
 
@@ -73,11 +121,41 @@ function AdminLoginGate() {
         </label>
         <label>
           Password
-          <input type="password" required value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
+          <PasswordInput required autoComplete="current-password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
         </label>
-        {error && <p className="gate-error">{error}</p>}
+        {error && <p className="gate-error" role="alert">{error}</p>}
+        {notice && <p className="gate-notice" role="status">{notice}</p>}
         <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Please wait…' : 'Log in'}</button>
+        <button type="button" className="gate-forgot" onClick={startRecovery} disabled={recoveryBusy}>
+          {recoveryBusy && !recovery ? 'Please wait…' : 'Forgot password?'}
+        </button>
+        <p className="gate-note">For safety, you&apos;ll be asked to log in again each time the browser is reopened.</p>
       </form>
+
+      {recovery && (
+        <QuestionsDialog
+          title="Reset admin password"
+          intro="Answer your security questions, then choose a new password."
+          questions={recovery.questions}
+          answers={recovery.answers}
+          setAnswers={(fn) => setRecovery((r) => ({ ...r, answers: fn(r.answers) }))}
+          error={recovery.error}
+          busy={recoveryBusy}
+          submitLabel="Reset password"
+          onSubmit={finishRecovery}
+          onClose={() => !recoveryBusy && setRecovery(null)}
+        >
+          <label>
+            New password
+            <PasswordInput autoComplete="new-password" value={recovery.next} onChange={(e) => setRecovery((r) => ({ ...r, next: e.target.value }))} />
+            {recovery.next && <PasswordChecks pw={recovery.next} />}
+          </label>
+          <label>
+            Confirm new password
+            <PasswordInput autoComplete="new-password" value={recovery.confirm} onChange={(e) => setRecovery((r) => ({ ...r, confirm: e.target.value }))} />
+          </label>
+        </QuestionsDialog>
+      )}
 
       <style>{`
         .admin-gate { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--stone-100); }
@@ -91,6 +169,10 @@ function AdminLoginGate() {
         .admin-gate-card label { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--ink-600); }
         .admin-gate-card input { padding: 11px 12px; border-radius: var(--radius-sm); border: 1px solid var(--stone-200); font-size: 13.5px; }
         .gate-error { font-size: 12.5px; color: #a13a3a; margin: 0; }
+        .gate-notice { font-size: 12.5px; color: #2f6b3a; margin: 0; }
+        .gate-forgot { align-self: center; background: none; border: none; color: var(--maroon-900); font-size: 12.5px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 4px; }
+        .gate-forgot:disabled { opacity: 0.6; cursor: default; }
+        .gate-note { font-size: 11.5px; color: var(--ink-400); text-align: center; margin: 0; line-height: 1.5; }
       `}</style>
     </div>
   );

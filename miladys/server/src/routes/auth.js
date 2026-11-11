@@ -3,8 +3,8 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { query } from '../db.js';
-import { signToken, requireAuth } from '../middleware/auth.js';
-import { sendLoginEmail, sendPasswordResetEmail } from '../lib/email.js';
+import { signToken, requireAuth, requireAdmin } from '../middleware/auth.js';
+import { sendLoginEmail, sendPasswordResetEmail, sendPasswordChangedEmail } from '../lib/email.js';
 import { limits } from '../middleware/rateLimit.js';
 import { checkAddress, normalizePhone } from '../lib/address.js';
 
@@ -170,13 +170,14 @@ router.post('/reset-password', ...limits.resetPassword, async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(newPassword, 10);
-  await query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, reset.user_id]);
+  // token_version + 1 signs out every other admin session on this account.
+  await query('UPDATE users SET password_hash = $1, token_version = token_version + 1 WHERE id = $2', [passwordHash, reset.user_id]);
   await query('UPDATE password_resets SET used_at = now() WHERE id = $1', [reset.id]);
   // Any other outstanding reset link for this account is invalidated too,
   // so an old emailed link can't still be used after this one succeeds.
   await query('DELETE FROM password_resets WHERE user_id = $1 AND id != $2', [reset.user_id, reset.id]);
 
-  const { rows: userRows } = await query('SELECT id, name, email, mobile, is_admin FROM users WHERE id = $1', [reset.user_id]);
+  const { rows: userRows } = await query('SELECT id, name, email, mobile, is_admin, token_version FROM users WHERE id = $1', [reset.user_id]);
   const user = userRows[0];
   const authToken = signToken(user);
   res.json({ ok: true, token: authToken, user: publicUser(user) });
@@ -216,12 +217,176 @@ router.post('/change-password', requireAuth, ...limits.changePassword, async (re
   const user = rows[0];
   if (!user) return res.status(404).json({ error: 'User not found.' });
 
+  // Admin passwords change from Admin → Account & Security, which also
+  // asks the security questions.
+  if (user.is_admin) return res.status(403).json({ error: 'Admin passwords are changed from Admin → Account & Security.' });
+
   const ok = await bcrypt.compare(currentPassword, user.password_hash);
   if (!ok) return res.status(401).json({ error: 'Current password is incorrect.' });
 
   const newHash = await bcrypt.hash(newPassword, 10);
   await query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, req.user.id]);
   res.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------
+// Admin account security: security questions, password change (asks the
+// questions too) and "forgot password" with the questions.
+// ---------------------------------------------------------------------
+const QUESTION_COUNT = 3;
+const MAX_WRONG = 5;            // wrong answer sets before recovery locks
+const LOCK_MINUTES = 30;
+// Answers compare without caring about case, spaces or punctuation
+// ("St. Ann's School" = "st anns school" = "StAnnsSchool").
+const normAnswer = (a) => String(a || '').toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu, '');
+function adminPasswordProblem(pw) {
+  if (typeof pw !== 'string' || pw.length < 8) return 'Use at least 8 characters for the admin password.';
+  if (pw.length > 128) return 'That password is too long (128 characters at most).';
+  if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) return 'Use both letters and numbers in the admin password.';
+  return null;
+}
+async function securityRow(userId) {
+  const { rows } = await query('SELECT * FROM admin_security WHERE user_id = $1', [userId]);
+  return rows[0] || null;
+}
+const lockedMessage = (until) => {
+  const mins = Math.max(1, Math.ceil((new Date(until) - Date.now()) / 60000));
+  return `Too many wrong answers — please try again in ${mins} minute${mins === 1 ? '' : 's'}.`;
+};
+// Checks every answer; counts wrong sets towards the lock. Returns an
+// error message, or null when all answers match.
+async function checkAnswers(row, answers) {
+  if (row.locked_until && new Date(row.locked_until) > new Date()) return lockedMessage(row.locked_until);
+  const list = Array.isArray(answers) ? answers : [];
+  let allRight = list.length === row.questions.length;
+  for (let i = 0; i < row.questions.length; i++) {
+    const given = normAnswer(list[i]);
+    // Compare every answer (no early exit) so timing doesn't hint which was wrong.
+    const ok = given ? await bcrypt.compare(given, row.questions[i].answer_hash) : false;
+    if (!ok) allRight = false;
+  }
+  if (allRight) {
+    await query('UPDATE admin_security SET failed_attempts = 0, locked_until = NULL WHERE user_id = $1', [row.user_id]);
+    return null;
+  }
+  const failed = row.failed_attempts + 1;
+  const lock = failed >= MAX_WRONG;
+  await query(
+    `UPDATE admin_security SET failed_attempts = $2, locked_until = ${lock ? `now() + interval '${LOCK_MINUTES} minutes'` : 'NULL'} WHERE user_id = $1`,
+    [row.user_id, lock ? 0 : failed]
+  );
+  if (lock) return `Too many wrong answers — please try again in ${LOCK_MINUTES} minutes.`;
+  const left = MAX_WRONG - failed;
+  return `One or more answers don't match. ${left} attempt${left === 1 ? '' : 's'} left before a ${LOCK_MINUTES}-minute lock.`;
+}
+
+router.get('/admin/security', requireAdmin, async (req, res) => {
+  const row = await securityRow(req.user.id);
+  res.json({
+    configured: !!row,
+    questions: row ? row.questions.map((q) => q.question) : [],
+    updatedAt: row?.updated_at || null,
+  });
+});
+
+// Set or replace the security questions (current password required).
+router.put('/admin/security', requireAdmin, ...limits.changePassword, async (req, res) => {
+  const { currentPassword, items } = req.body || {};
+  if (!currentPassword) return res.status(400).json({ error: 'Enter your current password to save security questions.' });
+  if (!Array.isArray(items) || items.length !== QUESTION_COUNT) return res.status(400).json({ error: `Please set ${QUESTION_COUNT} security questions.` });
+  const clean = items.map((it) => ({ question: String(it?.question || '').trim().replace(/\s+/g, ' '), answer: normAnswer(it?.answer) }));
+  if (clean.some((c) => c.question.length < 5 || c.question.length > 200)) return res.status(400).json({ error: 'Each question needs 5–200 characters.' });
+  if (new Set(clean.map((c) => c.question.toLowerCase())).size !== clean.length) return res.status(400).json({ error: 'Please pick three different questions.' });
+  if (items.some((it) => String(it?.answer || '').length > 100) || clean.some((c) => c.answer.length < 2)) return res.status(400).json({ error: 'Each answer needs at least 2 letters or numbers (100 characters at most).' });
+
+  const { rows } = await query('SELECT * FROM users WHERE id = $1', [req.user.id]);
+  const user = rows[0];
+  if (!user || !(await bcrypt.compare(currentPassword, user.password_hash))) {
+    return res.status(401).json({ error: 'Current password is incorrect.' });
+  }
+  const questions = [];
+  for (const c of clean) questions.push({ question: c.question, answer_hash: await bcrypt.hash(c.answer, 10) });
+  await query(
+    `INSERT INTO admin_security (user_id, questions) VALUES ($1, $2)
+     ON CONFLICT (user_id) DO UPDATE SET questions = EXCLUDED.questions, failed_attempts = 0, locked_until = NULL, updated_at = now()`,
+    [user.id, JSON.stringify(questions)]
+  );
+  res.json({ ok: true, configured: true, questions: questions.map((q) => q.question) });
+});
+
+// Change password: current password + new password + the security answers.
+router.post('/admin/change-password', requireAdmin, ...limits.changePassword, async (req, res) => {
+  const { currentPassword, newPassword, answers } = req.body || {};
+  if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Current and new password are required.' });
+  const problem = adminPasswordProblem(newPassword);
+  if (problem) return res.status(400).json({ error: problem });
+
+  const { rows } = await query('SELECT * FROM users WHERE id = $1', [req.user.id]);
+  const user = rows[0];
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+  if (!(await bcrypt.compare(currentPassword, user.password_hash))) {
+    return res.status(401).json({ error: 'Current password is incorrect.' });
+  }
+  if (await bcrypt.compare(newPassword, user.password_hash)) {
+    return res.status(400).json({ error: 'The new password must be different from the current one.' });
+  }
+  const row = await securityRow(user.id);
+  if (!row) return res.status(400).json({ error: 'Set up your security questions first.', code: 'NO_QUESTIONS' });
+  const wrong = await checkAnswers(row, answers);
+  if (wrong) return res.status(401).json({ error: wrong, code: 'WRONG_ANSWERS' });
+
+  const hash = await bcrypt.hash(newPassword, 10);
+  const { rows: upd } = await query(
+    'UPDATE users SET password_hash = $1, token_version = token_version + 1 WHERE id = $2 RETURNING *',
+    [hash, user.id]
+  );
+  sendPasswordChangedEmail(upd[0], { how: 'changed' }).catch(() => {});
+  // This browser stays signed in with a fresh token; every other session ends.
+  res.json({ ok: true, token: signToken(upd[0]), user: publicUser(upd[0]) });
+});
+
+// Forgot password (admin): step 1 — the questions for this email. Only
+// admins with questions set get them; everyone else gets the same reply.
+router.post('/admin/recovery/questions', ...limits.resetPassword, async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  if (!email) return res.status(400).json({ error: 'Enter your admin email.' });
+  const { rows } = await query(
+    `SELECT s.questions, s.locked_until FROM users u JOIN admin_security s ON s.user_id = u.id
+     WHERE u.email = $1 AND u.is_admin`,
+    [email]
+  );
+  if (!rows[0]) {
+    return res.status(404).json({ error: 'Security-question reset isn\'t available for this email. Use the email reset link from the main sign-in page instead.' });
+  }
+  if (rows[0].locked_until && new Date(rows[0].locked_until) > new Date()) {
+    return res.status(429).json({ error: lockedMessage(rows[0].locked_until) });
+  }
+  res.json({ questions: rows[0].questions.map((q) => q.question) });
+});
+
+// Forgot password (admin): step 2 — answers + new password.
+router.post('/admin/recovery/reset', ...limits.resetPassword, async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const { answers, newPassword } = req.body || {};
+  if (!email) return res.status(400).json({ error: 'Enter your admin email.' });
+  const problem = adminPasswordProblem(newPassword);
+  if (problem) return res.status(400).json({ error: problem });
+  const { rows } = await query(
+    `SELECT s.* FROM users u JOIN admin_security s ON s.user_id = u.id WHERE u.email = $1 AND u.is_admin`,
+    [email]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Security-question reset isn\'t available for this email.' });
+  const wrong = await checkAnswers(rows[0], answers);
+  if (wrong) return res.status(401).json({ error: wrong, code: 'WRONG_ANSWERS' });
+
+  const hash = await bcrypt.hash(newPassword, 10);
+  const { rows: upd } = await query(
+    'UPDATE users SET password_hash = $1, token_version = token_version + 1 WHERE id = $2 RETURNING *',
+    [hash, rows[0].user_id]
+  );
+  await query('DELETE FROM password_resets WHERE user_id = $1', [upd[0].id]);
+  sendPasswordChangedEmail(upd[0], { how: 'reset' }).catch(() => {});
+  res.json({ ok: true, token: signToken(upd[0]), user: publicUser(upd[0]) });
 });
 
 // --- Addresses ---

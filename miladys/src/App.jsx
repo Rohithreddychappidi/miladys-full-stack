@@ -63,6 +63,7 @@ const AdminTestimonials = lazyPage(() => import('./pages/admin/AdminTestimonials
 const AdminMessages = lazyPage(() => import('./pages/admin/AdminMessages'));
 const AdminStore = lazyPage(() => import('./pages/admin/AdminStore'));
 const AdminPolicies = lazyPage(() => import('./pages/admin/AdminPolicies'));
+const AdminAccount = lazyPage(() => import('./pages/admin/AdminAccount'));
 
 const pageFallback = <div className="page-loading" style={{ minHeight: '70vh' }} aria-busy="true" />;
 
@@ -128,6 +129,7 @@ export default function App() {
             <Route path="messages" element={<AdminMessages />} />
             <Route path="store" element={<AdminStore />} />
             <Route path="policies" element={<AdminPolicies />} />
+            <Route path="account" element={<AdminAccount />} />
             <Route path="*" element={<AdminDashboard />} />
           </Route>
         </Routes>

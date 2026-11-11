@@ -189,6 +189,28 @@ export function sendLoginEmail(user) {
   });
 }
 
+// Admin password changed (from the admin panel, or reset with the
+// security questions) — a heads-up in case it wasn't them.
+export function sendPasswordChangedEmail(user, { how = 'changed' } = {}) {
+  const when = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' });
+  const content = `
+    <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:400;color:${COLORS.maroon900};margin:0 0 16px;">
+      Hi ${escapeHtml(user.name)},
+    </h1>
+    <p style="font-size:14px;line-height:1.7;color:${COLORS.ink600};margin:0 0 8px;">
+      The password for your Milady&rsquo;s admin account was ${how === 'reset' ? 'reset using your security questions' : 'changed from the admin panel'} on ${escapeHtml(when)} (IST). Every other signed-in admin session has been signed out.
+    </p>
+    <p style="font-size:13px;line-height:1.7;color:${COLORS.ink400};margin:16px 0 0;">
+      If this wasn&rsquo;t you, reset your password straight away and update your security questions.
+    </p>
+  `;
+  return send({
+    to: user.email,
+    subject: "Your Milady's admin password was " + (how === 'reset' ? 'reset' : 'changed'),
+    html: layout({ preheader: 'Your admin password was ' + (how === 'reset' ? 'reset' : 'changed'), content, ctaLabel: 'Open admin panel', ctaUrl: `${siteUrl}/admin` }),
+  });
+}
+
 export function sendOrderConfirmationEmail(user, order, items) {
   const rows = items
     .map(

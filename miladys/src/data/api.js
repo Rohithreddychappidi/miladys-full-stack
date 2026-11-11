@@ -4,13 +4,88 @@
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 const TOKEN_KEY = 'miladys_token';
 
+// Where the sign-in is kept:
+// - customers: localStorage — they stay signed in for 30 days.
+// - admins: sessionStorage — gone once the browser is closed, so the admin
+//   panel asks for the password again (the server also ends admin sign-ins
+//   after 8 hours). Other open tabs of the site share the admin sign-in
+//   (see shareSessionWithOtherTabs below).
+function tokenPayload(token) {
+  try {
+    const part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(part.padEnd(part.length + ((4 - (part.length % 4)) % 4), '=')));
+  } catch {
+    return null;
+  }
+}
+const store = (kind) => {
+  try { return kind === 'session' ? window.sessionStorage : window.localStorage; } catch { return null; }
+};
+
 export function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
+  const s = store('session')?.getItem(TOKEN_KEY);
+  if (s) return s;
+  const l = store('local')?.getItem(TOKEN_KEY);
+  // An admin sign-in saved by the older site (in localStorage) is dropped,
+  // so the admin signs in once more and it's kept the new way.
+  if (l && tokenPayload(l)?.isAdmin) {
+    store('local')?.removeItem(TOKEN_KEY);
+    return null;
+  }
+  return l || null;
 }
 
-export function setToken(token) {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
+const SYNC_KEY = 'miladys_session_sync';
+function broadcast(message) {
+  try {
+    localStorage.setItem(SYNC_KEY, JSON.stringify({ ...message, at: Date.now(), nonce: Math.random() }));
+    localStorage.removeItem(SYNC_KEY);
+  } catch { /* storage blocked — tabs just don't share */ }
+}
+
+export function setToken(token, { silent = false } = {}) {
+  const hadAdmin = !!store('session')?.getItem(TOKEN_KEY);
+  store('session')?.removeItem(TOKEN_KEY);
+  store('local')?.removeItem(TOKEN_KEY);
+  if (!token) {
+    if (hadAdmin && !silent) broadcast({ type: 'logout' });
+    return;
+  }
+  if (tokenPayload(token)?.isAdmin) store('session')?.setItem(TOKEN_KEY, token);
+  else store('local')?.setItem(TOKEN_KEY, token);
+}
+
+// Admin sign-in shared between open tabs: a new tab asks, an open tab that
+// is signed in answers (the token passes through localStorage only for an
+// instant). Signing out in one tab signs out the others.
+let onRemoteLogout = () => {};
+export function onSessionEnded(fn) { onRemoteLogout = fn; }
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key !== SYNC_KEY || !e.newValue) return;
+    let msg;
+    try { msg = JSON.parse(e.newValue); } catch { return; }
+    const mine = store('session')?.getItem(TOKEN_KEY);
+    if (msg.type === 'ask' && mine) broadcast({ type: 'share', token: mine });
+    else if (msg.type === 'share' && msg.token && !mine && !store('local')?.getItem(TOKEN_KEY) && tokenPayload(msg.token)?.isAdmin) {
+      store('session')?.setItem(TOKEN_KEY, msg.token);
+      window.dispatchEvent(new Event('miladys:session-shared'));
+    } else if (msg.type === 'logout' && mine) {
+      store('session')?.removeItem(TOKEN_KEY);
+      onRemoteLogout();
+    }
+  });
+}
+// Called once on start-up when this tab has no sign-in: waits briefly for
+// another open tab to share its admin sign-in.
+export function askOtherTabsForSession(waitMs = 250) {
+  if (getToken()) return Promise.resolve(getToken());
+  return new Promise((resolve) => {
+    const done = () => { window.removeEventListener('miladys:session-shared', done); clearTimeout(t); resolve(getToken()); };
+    const t = setTimeout(done, waitMs);
+    window.addEventListener('miladys:session-shared', done);
+    broadcast({ type: 'ask' });
+  });
 }
 
 async function request(path, { method = 'GET', body, auth = true } = {}) {
@@ -36,6 +111,12 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
   if (!res.ok) {
     // status + body are kept on the error so callers can react to specific
     // cases (e.g. 409 "possible duplicate" when adding a product).
+    // Admin sign-in ended on the server (8 hours passed, or the password
+    // was changed elsewhere) — show the admin sign-in again.
+    if (res.status === 401 && data.code === 'SIGNED_OUT' && auth && token && tokenPayload(token)?.isAdmin) {
+      setToken(null, { silent: true });
+      window.dispatchEvent(new Event('miladys:admin-signed-out'));
+    }
     const err = new Error(data.error || 'Something went wrong.');
     err.status = res.status;
     err.data = data;
@@ -107,6 +188,11 @@ export const api = {
   me: () => request('/api/auth/me'),
   updateMe: (payload) => request('/api/auth/me', { method: 'PUT', body: payload }),
   changePassword: (payload) => request('/api/auth/change-password', { method: 'POST', body: payload }),
+  adminSecurity: () => request('/api/auth/admin/security'),
+  saveAdminSecurity: (payload) => request('/api/auth/admin/security', { method: 'PUT', body: payload }),
+  adminChangePassword: (payload) => request('/api/auth/admin/change-password', { method: 'POST', body: payload }),
+  adminRecoveryQuestions: (payload) => request('/api/auth/admin/recovery/questions', { method: 'POST', body: payload, auth: false }),
+  adminRecoveryReset: (payload) => request('/api/auth/admin/recovery/reset', { method: 'POST', body: payload, auth: false }),
   getAddresses: () => request('/api/auth/addresses'),
   addAddress: (payload) => request('/api/auth/addresses', { method: 'POST', body: payload }),
   deleteAddress: (id) => request(`/api/auth/addresses/${id}`, { method: 'DELETE' }),
